@@ -8,11 +8,13 @@ package gutil
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"reflect"
 	"strings"
 
+	"github.com/gogf/gf/v2/internal/reflection"
 	"github.com/gogf/gf/v2/os/gstructs"
 	"github.com/gogf/gf/v2/text/gstr"
 )
@@ -34,14 +36,16 @@ type iMarshalJSON interface {
 
 // DumpOption specifies the behavior of function Export.
 type DumpOption struct {
-	WithType bool // WithType specifies dumping content with type information.
+	WithType     bool // WithType specifies dumping content with type information.
+	ExportedOnly bool // Only dump Exported fields for structs.
 }
 
 // Dump prints variables `values` to stdout with more manually readable.
 func Dump(values ...interface{}) {
 	for _, value := range values {
 		DumpWithOption(value, DumpOption{
-			WithType: false,
+			WithType:     false,
+			ExportedOnly: false,
 		})
 	}
 }
@@ -51,7 +55,8 @@ func Dump(values ...interface{}) {
 func DumpWithType(values ...interface{}) {
 	for _, value := range values {
 		DumpWithOption(value, DumpOption{
-			WithType: true,
+			WithType:     true,
+			ExportedOnly: false,
 		})
 	}
 }
@@ -60,7 +65,8 @@ func DumpWithType(values ...interface{}) {
 func DumpWithOption(value interface{}, option DumpOption) {
 	buffer := bytes.NewBuffer(nil)
 	DumpTo(buffer, value, DumpOption{
-		WithType: option.WithType,
+		WithType:     option.WithType,
+		ExportedOnly: option.ExportedOnly,
 	})
 	fmt.Println(buffer.String())
 }
@@ -69,43 +75,71 @@ func DumpWithOption(value interface{}, option DumpOption) {
 func DumpTo(writer io.Writer, value interface{}, option DumpOption) {
 	buffer := bytes.NewBuffer(nil)
 	doDump(value, "", buffer, doDumpOption{
-		WithType: option.WithType,
+		WithType:     option.WithType,
+		ExportedOnly: option.ExportedOnly,
 	})
 	_, _ = writer.Write(buffer.Bytes())
 }
 
 type doDumpOption struct {
-	WithType bool
+	WithType         bool
+	ExportedOnly     bool
+	DumpedPointerSet map[string]struct{}
 }
 
 func doDump(value interface{}, indent string, buffer *bytes.Buffer, option doDumpOption) {
+	if option.DumpedPointerSet == nil {
+		option.DumpedPointerSet = map[string]struct{}{}
+	}
+
 	if value == nil {
 		buffer.WriteString(`<nil>`)
 		return
 	}
+	var reflectValue reflect.Value
+	if v, ok := value.(reflect.Value); ok {
+		reflectValue = v
+		if v.IsValid() && v.CanInterface() {
+			value = v.Interface()
+		} else {
+			if convertedValue, ok := reflection.ValueToInterface(v); ok {
+				value = convertedValue
+			}
+		}
+	} else {
+		reflectValue = reflect.ValueOf(value)
+	}
+	var reflectKind = reflectValue.Kind()
+	// Double check nil value.
+	if value == nil || reflectKind == reflect.Invalid {
+		buffer.WriteString(`<nil>`)
+		return
+	}
 	var (
-		reflectValue    = reflect.ValueOf(value)
-		reflectKind     = reflectValue.Kind()
-		reflectTypeName = reflect.TypeOf(value).String()
+		reflectTypeName = reflectValue.Type().String()
+		ptrAddress      string
 		newIndent       = indent + dumpIndent
 	)
 	reflectTypeName = strings.ReplaceAll(reflectTypeName, `[]uint8`, `[]byte`)
-	if !option.WithType {
-		reflectTypeName = ""
-	}
 	for reflectKind == reflect.Ptr {
+		if ptrAddress == "" {
+			ptrAddress = fmt.Sprintf(`0x%x`, reflectValue.Pointer())
+		}
 		reflectValue = reflectValue.Elem()
 		reflectKind = reflectValue.Kind()
 	}
 	var (
 		exportInternalInput = doDumpInternalInput{
-			Value:           value,
-			Indent:          indent,
-			NewIndent:       newIndent,
-			Buffer:          buffer,
-			Option:          option,
-			ReflectValue:    reflectValue,
-			ReflectTypeName: reflectTypeName,
+			Value:            value,
+			Indent:           indent,
+			NewIndent:        newIndent,
+			Buffer:           buffer,
+			Option:           option,
+			PtrAddress:       ptrAddress,
+			ReflectValue:     reflectValue,
+			ReflectTypeName:  reflectTypeName,
+			ExportedOnly:     option.ExportedOnly,
+			DumpedPointerSet: option.DumpedPointerSet,
 		}
 	)
 	switch reflectKind {
@@ -142,14 +176,17 @@ func doDump(value interface{}, indent string, buffer *bytes.Buffer, option doDum
 		doDumpNumber(exportInternalInput)
 
 	case reflect.Chan:
-		buffer.WriteString(fmt.Sprintf(`<%s>`, reflect.TypeOf(value).String()))
+		buffer.WriteString(fmt.Sprintf(`<%s>`, reflectValue.Type().String()))
 
 	case reflect.Func:
 		if reflectValue.IsNil() || !reflectValue.IsValid() {
 			buffer.WriteString(`<nil>`)
 		} else {
-			buffer.WriteString(fmt.Sprintf(`<%s>`, reflect.TypeOf(value).String()))
+			buffer.WriteString(fmt.Sprintf(`<%s>`, reflectValue.Type().String()))
 		}
+
+	case reflect.Interface:
+		doDump(exportInternalInput.ReflectValue.Elem(), indent, buffer, option)
 
 	default:
 		doDumpDefault(exportInternalInput)
@@ -157,13 +194,16 @@ func doDump(value interface{}, indent string, buffer *bytes.Buffer, option doDum
 }
 
 type doDumpInternalInput struct {
-	Value           interface{}
-	Indent          string
-	NewIndent       string
-	Buffer          *bytes.Buffer
-	Option          doDumpOption
-	ReflectValue    reflect.Value
-	ReflectTypeName string
+	Value            interface{}
+	Indent           string
+	NewIndent        string
+	Buffer           *bytes.Buffer
+	Option           doDumpOption
+	ReflectValue     reflect.Value
+	ReflectTypeName  string
+	PtrAddress       string
+	ExportedOnly     bool
+	DumpedPointerSet map[string]struct{}
 }
 
 func doDumpSlice(in doDumpInternalInput) {
@@ -195,16 +235,21 @@ func doDumpSlice(in doDumpInternalInput) {
 	}
 	for i := 0; i < in.ReflectValue.Len(); i++ {
 		in.Buffer.WriteString(in.NewIndent)
-		doDump(in.ReflectValue.Index(i).Interface(), in.NewIndent, in.Buffer, in.Option)
+		doDump(in.ReflectValue.Index(i), in.NewIndent, in.Buffer, in.Option)
 		in.Buffer.WriteString(",\n")
 	}
 	in.Buffer.WriteString(fmt.Sprintf("%s]", in.Indent))
 }
 
 func doDumpMap(in doDumpInternalInput) {
-	var (
-		mapKeys = in.ReflectValue.MapKeys()
-	)
+	var mapKeys = make([]reflect.Value, 0)
+	for _, key := range in.ReflectValue.MapKeys() {
+		if !key.CanInterface() {
+			continue
+		}
+		mapKey := key
+		mapKeys = append(mapKeys, mapKey)
+	}
 	if len(mapKeys) == 0 {
 		if !in.Option.WithType {
 			in.Buffer.WriteString("{}")
@@ -254,18 +299,36 @@ func doDumpMap(in doDumpInternalInput) {
 			))
 		}
 		// Map value dump.
-		doDump(in.ReflectValue.MapIndex(mapKey).Interface(), in.NewIndent, in.Buffer, in.Option)
+		doDump(in.ReflectValue.MapIndex(mapKey), in.NewIndent, in.Buffer, in.Option)
 		in.Buffer.WriteString(",\n")
 	}
 	in.Buffer.WriteString(fmt.Sprintf("%s}", in.Indent))
 }
 
 func doDumpStruct(in doDumpInternalInput) {
+	if in.PtrAddress != "" {
+		if _, ok := in.DumpedPointerSet[in.PtrAddress]; ok {
+			in.Buffer.WriteString(fmt.Sprintf(`<cycle dump %s>`, in.PtrAddress))
+			return
+		}
+	}
+	in.DumpedPointerSet[in.PtrAddress] = struct{}{}
+
 	structFields, _ := gstructs.Fields(gstructs.FieldsInput{
 		Pointer:         in.Value,
 		RecursiveOption: gstructs.RecursiveOptionEmbedded,
 	})
-	if len(structFields) == 0 {
+	var (
+		hasNoExportedFields = true
+		_, isReflectValue   = in.Value.(reflect.Value)
+	)
+	for _, field := range structFields {
+		if field.IsExported() {
+			hasNoExportedFields = false
+			break
+		}
+	}
+	if !isReflectValue && (len(structFields) == 0 || hasNoExportedFields) {
 		var (
 			structContentStr  = ""
 			attributeCountStr = "0"
@@ -277,6 +340,11 @@ func doDumpStruct(in doDumpInternalInput) {
 		} else if v, ok := in.Value.(iMarshalJSON); ok {
 			b, _ := v.MarshalJSON()
 			structContentStr = string(b)
+		} else {
+			// Has no common interface implements.
+			if len(structFields) != 0 {
+				goto dumpStructFields
+			}
 		}
 		if structContentStr == "" {
 			structContentStr = "{}"
@@ -296,11 +364,16 @@ func doDumpStruct(in doDumpInternalInput) {
 		}
 		return
 	}
+
+dumpStructFields:
 	var (
 		maxSpaceNum = 0
 		tmpSpaceNum = 0
 	)
 	for _, field := range structFields {
+		if in.ExportedOnly && !field.IsExported() {
+			continue
+		}
 		tmpSpaceNum = len(field.Name())
 		if tmpSpaceNum > maxSpaceNum {
 			maxSpaceNum = tmpSpaceNum
@@ -312,6 +385,9 @@ func doDumpStruct(in doDumpInternalInput) {
 		in.Buffer.WriteString(fmt.Sprintf("%s(%d) {\n", in.ReflectTypeName, len(structFields)))
 	}
 	for _, field := range structFields {
+		if in.ExportedOnly && !field.IsExported() {
+			continue
+		}
 		tmpSpaceNum = len(fmt.Sprintf(`%v`, field.Name()))
 		in.Buffer.WriteString(fmt.Sprintf(
 			"%s%s:%s",
@@ -319,7 +395,7 @@ func doDumpStruct(in doDumpInternalInput) {
 			field.Name(),
 			strings.Repeat(" ", maxSpaceNum-tmpSpaceNum+1),
 		))
-		doDump(field.Value.Interface(), in.NewIndent, in.Buffer, in.Option)
+		doDump(field.Value, in.NewIndent, in.Buffer, in.Option)
 		in.Buffer.WriteString(",\n")
 	}
 	in.Buffer.WriteString(fmt.Sprintf("%s}", in.Indent))
@@ -371,7 +447,13 @@ func doDumpBool(in doDumpInternalInput) {
 }
 
 func doDumpDefault(in doDumpInternalInput) {
-	s := fmt.Sprintf("%v", in.Value)
+	var s string
+	if in.ReflectValue.IsValid() && in.ReflectValue.CanInterface() {
+		s = fmt.Sprintf("%v", in.ReflectValue.Interface())
+	}
+	if s == "" {
+		s = fmt.Sprintf("%v", in.Value)
+	}
 	s = gstr.Trim(s, `<>`)
 	if !in.Option.WithType {
 		in.Buffer.WriteString(s)
@@ -383,8 +465,37 @@ func doDumpDefault(in doDumpInternalInput) {
 func addSlashesForString(s string) string {
 	return gstr.ReplaceByMap(s, map[string]string{
 		`"`:  `\"`,
+		`'`:  `\'`,
 		"\r": `\r`,
 		"\t": `\t`,
 		"\n": `\n`,
 	})
+}
+
+// DumpJson pretty dumps json content to stdout.
+func DumpJson(value any) {
+	switch result := value.(type) {
+	case []byte:
+		doDumpJson(result)
+	case string:
+		doDumpJson([]byte(result))
+	default:
+		jsonContent, err := json.Marshal(value)
+		if err != nil {
+			fmt.Println(err.Error())
+			return
+		}
+		doDumpJson(jsonContent)
+	}
+}
+
+func doDumpJson(jsonContent []byte) {
+	var (
+		buffer    = bytes.NewBuffer(nil)
+		jsonBytes = jsonContent
+	)
+	if err := json.Indent(buffer, jsonBytes, "", "    "); err != nil {
+		fmt.Println(err.Error())
+	}
+	fmt.Println(buffer.String())
 }

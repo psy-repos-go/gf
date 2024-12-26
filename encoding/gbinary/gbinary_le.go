@@ -29,7 +29,6 @@ func LeEncode(values ...interface{}) []byte {
 		if values[i] == nil {
 			return buf.Bytes()
 		}
-
 		switch value := values[i].(type) {
 		case int:
 			buf.Write(LeEncodeInt(value))
@@ -61,9 +60,10 @@ func LeEncode(values ...interface{}) []byte {
 			buf.Write(LeEncodeFloat32(value))
 		case float64:
 			buf.Write(LeEncodeFloat64(value))
+
 		default:
 			if err := binary.Write(buf, binary.LittleEndian, value); err != nil {
-				intlog.Error(context.TODO(), err)
+				intlog.Errorf(context.TODO(), `%+v`, err)
 				buf.Write(LeEncodeString(fmt.Sprintf("%v", value)))
 			}
 		}
@@ -104,7 +104,7 @@ func LeDecodeToString(b []byte) string {
 }
 
 func LeEncodeBool(b bool) []byte {
-	if b == true {
+	if b {
 		return []byte{1}
 	} else {
 		return []byte{0}
@@ -221,7 +221,7 @@ func LeDecodeToBool(b []byte) bool {
 	if len(b) == 0 {
 		return false
 	}
-	if bytes.Compare(b, make([]byte, len(b))) == 0 {
+	if bytes.Equal(b, make([]byte, len(b))) {
 		return false
 	}
 	return true

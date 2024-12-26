@@ -6,23 +6,51 @@
 
 package gdb
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/gogf/gf/v2/text/gstr"
+	"github.com/gogf/gf/v2/util/gconv"
+)
 
 // Order sets the "ORDER BY" statement for the model.
 //
-// Eg:
+// Example:
 // Order("id desc")
 // Order("id", "desc")
-// Order("id desc,name asc").
-func (m *Model) Order(orderBy ...string) *Model {
+// Order("id desc,name asc")
+// Order("id desc", "name asc")
+// Order("id desc").Order("name asc")
+// Order(gdb.Raw("field(id, 3,1,2)")).
+func (m *Model) Order(orderBy ...interface{}) *Model {
 	if len(orderBy) == 0 {
 		return m
 	}
-	model := m.getModel()
-	if model.orderBy != "" {
-		model.orderBy += ","
+	var (
+		core  = m.db.GetCore()
+		model = m.getModel()
+	)
+	for _, v := range orderBy {
+		if model.orderBy != "" {
+			model.orderBy += ","
+		}
+		switch v.(type) {
+		case Raw, *Raw:
+			model.orderBy += gconv.String(v)
+		default:
+			orderByStr := gconv.String(v)
+			if gstr.Contains(orderByStr, " ") {
+				model.orderBy += core.QuoteString(orderByStr)
+			} else {
+				if gstr.Equal(orderByStr, "ASC") || gstr.Equal(orderByStr, "DESC") {
+					model.orderBy = gstr.TrimRight(model.orderBy, ",")
+					model.orderBy += " " + orderByStr
+				} else {
+					model.orderBy += core.QuoteWord(orderByStr)
+				}
+			}
+		}
 	}
-	model.orderBy = model.db.GetCore().QuoteString(strings.Join(orderBy, " "))
 	return model
 }
 
@@ -45,7 +73,7 @@ func (m *Model) OrderDesc(column string) *Model {
 // OrderRandom sets the "ORDER BY RANDOM()" statement for the model.
 func (m *Model) OrderRandom() *Model {
 	model := m.getModel()
-	model.orderBy = "RAND()"
+	model.orderBy = m.db.OrderRandomFunction()
 	return model
 }
 
@@ -54,10 +82,14 @@ func (m *Model) Group(groupBy ...string) *Model {
 	if len(groupBy) == 0 {
 		return m
 	}
-	model := m.getModel()
+	var (
+		core  = m.db.GetCore()
+		model = m.getModel()
+	)
+
 	if model.groupBy != "" {
 		model.groupBy += ","
 	}
-	model.groupBy = model.db.GetCore().QuoteString(strings.Join(groupBy, ","))
+	model.groupBy += core.QuoteString(strings.Join(groupBy, ","))
 	return model
 }

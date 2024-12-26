@@ -9,8 +9,9 @@ package ghttp
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"mime/multipart"
+	"net/http"
 	"reflect"
 	"strings"
 
@@ -29,9 +30,9 @@ import (
 )
 
 const (
-	parseTypeRequest = 0
-	parseTypeQuery   = 1
-	parseTypeForm    = 2
+	parseTypeRequest = iota
+	parseTypeQuery
+	parseTypeForm
 )
 
 var (
@@ -45,7 +46,7 @@ var (
 //
 // The parameter `pointer` can be type of: *struct/**struct/*[]struct/*[]*struct.
 //
-// It supports single and multiple struct convertion:
+// It supports single and multiple struct converting:
 // 1. Single struct, post content like: {"id":1, "name":"john"} or ?id=1&name=john
 // 2. Multiple struct, post content like: [{"id":1, "name":"john"}, {"id":, "name":"smith"}]
 //
@@ -106,15 +107,20 @@ func (r *Request) doParse(pointer interface{}, requestType int) error {
 				return err
 			}
 		}
+		// TODO: https://github.com/gogf/gf/pull/2450
 		// Validation.
-		if err = gvalid.New().Data(pointer).Assoc(data).Run(r.Context()); err != nil {
+		if err = gvalid.New().
+			Bail().
+			Data(pointer).
+			Assoc(data).
+			Run(r.Context()); err != nil {
 			return err
 		}
 
 	// Multiple struct, it only supports JSON type post content like:
 	// [{"id":1, "name":"john"}, {"id":, "name":"smith"}]
 	case reflect.Array, reflect.Slice:
-		// If struct slice conversion, it might post JSON/XML content,
+		// If struct slice conversion, it might post JSON/XML/... content,
 		// so it uses `gjson` for the conversion.
 		j, err := gjson.LoadContent(r.GetBody())
 		if err != nil {
@@ -125,7 +131,9 @@ func (r *Request) doParse(pointer interface{}, requestType int) error {
 		}
 		for i := 0; i < reflectVal2.Len(); i++ {
 			if err = gvalid.New().
-				Data(reflectVal2.Index(i)).Assoc(j.Get(gconv.String(i)).Map()).
+				Bail().
+				Data(reflectVal2.Index(i)).
+				Assoc(j.Get(gconv.String(i)).Map()).
 				Run(r.Context()); err != nil {
 				return err
 			}
@@ -145,13 +153,25 @@ func (r *Request) Get(key string, def ...interface{}) *gvar.Var {
 // It can be called multiple times retrieving the same body content.
 func (r *Request) GetBody() []byte {
 	if r.bodyContent == nil {
-		var err error
-		r.bodyContent, err = ioutil.ReadAll(r.Body)
-		if err != nil {
-			panic(gerror.WrapCode(gcode.CodeInternalError, err, `ReadAll from body failed`))
-		}
-		r.Body = utils.NewReadCloser(r.bodyContent, true)
+		r.bodyContent = r.MakeBodyRepeatableRead(true)
 	}
+	return r.bodyContent
+}
+
+// MakeBodyRepeatableRead marks the request body could be repeatedly readable or not.
+// It also returns the current content of the request body.
+func (r *Request) MakeBodyRepeatableRead(repeatableRead bool) []byte {
+	if r.bodyContent == nil {
+		var err error
+		if r.bodyContent, err = io.ReadAll(r.Body); err != nil {
+			errMsg := `Read from request Body failed`
+			if gerror.Is(err, io.EOF) {
+				errMsg += `, the Body might be closed or read manually from middleware/hook/other package previously`
+			}
+			panic(gerror.WrapCode(gcode.CodeInternalError, err, errMsg))
+		}
+	}
+	r.Body = utils.NewReadCloser(r.bodyContent, repeatableRead)
 	return r.bodyContent
 }
 
@@ -164,7 +184,10 @@ func (r *Request) GetBodyString() string {
 // GetJson parses current request content as JSON format, and returns the JSON object.
 // Note that the request content is read from request BODY, not from any field of FORM.
 func (r *Request) GetJson() (*gjson.Json, error) {
-	return gjson.LoadJson(r.GetBody())
+	return gjson.LoadWithOptions(r.GetBody(), gjson.Options{
+		Type:      gjson.ContentTypeJson,
+		StrNumber: true,
+	})
 }
 
 // GetMap is an alias and convenient function for GetRequestMap.
@@ -226,7 +249,7 @@ func (r *Request) parseBody() {
 			r.bodyMap, _ = gxml.DecodeWithoutRoot(body)
 		}
 		// Default parameters decoding.
-		if r.bodyMap == nil {
+		if contentType := r.Header.Get("Content-Type"); (contentType == "" || !gstr.Contains(contentType, "multipart/")) && r.bodyMap == nil {
 			r.bodyMap, _ = gstr.Parse(r.GetBodyString())
 		}
 	}
@@ -246,8 +269,14 @@ func (r *Request) parseForm() {
 		return
 	}
 	if contentType := r.Header.Get("Content-Type"); contentType != "" {
-		var err error
+		var (
+			err            error
+			repeatableRead = true
+		)
 		if gstr.Contains(contentType, "multipart/") {
+			// To avoid big memory consuming.
+			// The `multipart/` type form always contains binary data, which is not necessary read twice.
+			repeatableRead = false
 			// multipart/form-data, multipart/mixed
 			if err = r.ParseMultipartForm(r.Server.config.FormParsingMemory); err != nil {
 				panic(gerror.WrapCode(gcode.CodeInvalidRequest, err, "r.ParseMultipartForm failed"))
@@ -258,8 +287,11 @@ func (r *Request) parseForm() {
 				panic(gerror.WrapCode(gcode.CodeInvalidRequest, err, "r.Request.ParseForm failed"))
 			}
 		}
+		if repeatableRead {
+			r.MakeBodyRepeatableRead(true)
+		}
 		if len(r.PostForm) > 0 {
-			// Re-parse the form data using united parsing way.
+			// Parse the form data using united parsing way.
 			params := ""
 			for name, values := range r.PostForm {
 				// Invalid parameter name.
@@ -305,7 +337,7 @@ func (r *Request) parseForm() {
 	}
 	// It parses the request body without checking the Content-Type.
 	if r.formMap == nil {
-		if r.Method != "GET" {
+		if r.Method != http.MethodGet {
 			r.parseBody()
 		}
 		if len(r.bodyMap) > 0 {
@@ -314,7 +346,7 @@ func (r *Request) parseForm() {
 	}
 }
 
-// GetMultipartForm parses and returns the form as multipart form.
+// GetMultipartForm parses and returns the form as multipart forms.
 func (r *Request) GetMultipartForm() *multipart.Form {
 	r.parseForm()
 	return r.MultipartForm
@@ -336,7 +368,7 @@ func (r *Request) GetMultipartFiles(name string) []*multipart.FileHeader {
 	}
 	// Support "name[0]","name[1]","name[2]", etc. as array parameter.
 	var (
-		key   = ""
+		key   string
 		files = make([]*multipart.FileHeader, 0)
 	)
 	for i := 0; ; i++ {

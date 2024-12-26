@@ -63,6 +63,7 @@ func Test_IntStrMap_Basic(t *testing.T) {
 		t.Assert(m.Size(), 1)
 		t.Assert(m.IsEmpty(), false)
 
+		t.Assert(m.GetOrSet(1, "a"), "a")
 		t.Assert(m.GetOrSet(2, "b"), "b")
 		t.Assert(m.SetIfNotExist(2, "b"), false)
 
@@ -90,6 +91,29 @@ func Test_IntStrMap_Basic(t *testing.T) {
 		m2 := gmap.NewIntStrMapFrom(map[int]string{1: "a", 2: "b"})
 		t.Assert(m2.Map(), map[int]string{1: "a", 2: "b"})
 	})
+
+	gtest.C(t, func(t *gtest.T) {
+		m := gmap.NewIntStrMap(true)
+		m.Set(1, "val1")
+		t.Assert(m.Map(), map[int]string{1: "val1"})
+	})
+}
+
+func TestIntStrMap_MapStrAny(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		m := gmap.NewIntStrMap()
+		m.GetOrSetFunc(1, getStr)
+		m.GetOrSetFuncLock(2, getStr)
+		t.Assert(m.MapStrAny(), g.MapStrAny{"1": "z", "2": "z"})
+	})
+}
+
+func TestIntStrMap_Sets(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		m := gmap.NewIntStrMapFrom(nil)
+		m.Sets(g.MapIntStr{1: "z", 2: "z"})
+		t.Assert(len(m.Map()), 2)
+	})
 }
 
 func Test_IntStrMap_Set_Fun(t *testing.T) {
@@ -97,6 +121,8 @@ func Test_IntStrMap_Set_Fun(t *testing.T) {
 		m := gmap.NewIntStrMap()
 		m.GetOrSetFunc(1, getStr)
 		m.GetOrSetFuncLock(2, getStr)
+		t.Assert(m.GetOrSetFunc(1, getStr), "z")
+		t.Assert(m.GetOrSetFuncLock(2, getStr), "z")
 		t.Assert(m.Get(1), "z")
 		t.Assert(m.Get(2), "z")
 		t.Assert(m.SetIfNotExistFunc(1, getStr), false)
@@ -104,6 +130,16 @@ func Test_IntStrMap_Set_Fun(t *testing.T) {
 
 		t.Assert(m.SetIfNotExistFuncLock(2, getStr), false)
 		t.Assert(m.SetIfNotExistFuncLock(4, getStr), true)
+	})
+
+	gtest.C(t, func(t *gtest.T) {
+		m := gmap.NewIntStrMapFrom(nil)
+		t.Assert(m.GetOrSetFuncLock(1, getStr), "z")
+	})
+
+	gtest.C(t, func(t *gtest.T) {
+		m := gmap.NewIntStrMapFrom(nil)
+		t.Assert(m.SetIfNotExistFuncLock(1, getStr), true)
 	})
 }
 
@@ -116,6 +152,23 @@ func Test_IntStrMap_Batch(t *testing.T) {
 		t.Assert(m.Map(), map[int]interface{}{3: "c"})
 	})
 }
+
+func Test_IntStrMap_Iterator_Deadlock(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		m := gmap.NewIntStrMapFrom(map[int]string{1: "1", 2: "2", 3: "3", 4: "4"}, true)
+		m.Iterator(func(k int, _ string) bool {
+			if k%2 == 0 {
+				m.Remove(k)
+			}
+			return true
+		})
+		t.Assert(m.Map(), map[int]string{
+			1: "1",
+			3: "3",
+		})
+	})
+}
+
 func Test_IntStrMap_Iterator(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
 		expect := map[int]string{1: "a", 2: "b"}
@@ -168,6 +221,7 @@ func Test_IntStrMap_Clone(t *testing.T) {
 		t.AssertIN(2, m.Keys())
 	})
 }
+
 func Test_IntStrMap_Merge(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
 		m1 := gmap.NewIntStrMap()
@@ -176,6 +230,10 @@ func Test_IntStrMap_Merge(t *testing.T) {
 		m2.Set(2, "b")
 		m1.Merge(m2)
 		t.Assert(m1.Map(), map[int]string{1: "a", 2: "b"})
+
+		m3 := gmap.NewIntStrMapFrom(nil)
+		m3.Merge(m2)
+		t.Assert(m3.Map(), m2.Map())
 	})
 }
 
@@ -246,11 +304,11 @@ func Test_IntStrMap_Json(t *testing.T) {
 			2: "v2",
 		}
 		b, err := json.Marshal(data)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 
 		m := gmap.NewIntStrMap()
 		err = json.UnmarshalUseNumber(b, m)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(m.Get(1), data[1])
 		t.Assert(m.Get(2), data[2])
 	})
@@ -275,6 +333,10 @@ func Test_IntStrMap_Pop(t *testing.T) {
 
 		t.AssertNE(k1, k2)
 		t.AssertNE(v1, v2)
+
+		k3, v3 := m.Pop()
+		t.Assert(k3, 0)
+		t.Assert(v3, "")
 	})
 }
 
@@ -306,6 +368,11 @@ func Test_IntStrMap_Pops(t *testing.T) {
 
 		t.Assert(kArray.Unique().Len(), 3)
 		t.Assert(vArray.Unique().Len(), 3)
+
+		v := m.Pops(1)
+		t.AssertNil(v)
+		v = m.Pops(-1)
+		t.AssertNil(v)
 	})
 }
 
@@ -321,7 +388,7 @@ func TestIntStrMap_UnmarshalValue(t *testing.T) {
 			"name": "john",
 			"map":  []byte(`{"1":"v1","2":"v2"}`),
 		}, &v)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(v.Name, "john")
 		t.Assert(v.Map.Size(), 2)
 		t.Assert(v.Map.Get(1), "v1")
@@ -337,10 +404,98 @@ func TestIntStrMap_UnmarshalValue(t *testing.T) {
 				2: "v2",
 			},
 		}, &v)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(v.Name, "john")
 		t.Assert(v.Map.Size(), 2)
 		t.Assert(v.Map.Get(1), "v1")
 		t.Assert(v.Map.Get(2), "v2")
+	})
+}
+
+func TestIntStrMap_Replace(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		m := gmap.NewIntStrMapFrom(g.MapIntStr{
+			1: "v1",
+			2: "v2",
+			3: "v3",
+		})
+
+		t.Assert(m.Get(1), "v1")
+		t.Assert(m.Get(2), "v2")
+		t.Assert(m.Get(3), "v3")
+
+		m.Replace(g.MapIntStr{
+			1: "v2",
+			2: "v3",
+			3: "v1",
+		})
+
+		t.Assert(m.Get(1), "v2")
+		t.Assert(m.Get(2), "v3")
+		t.Assert(m.Get(3), "v1")
+	})
+}
+
+func TestIntStrMap_String(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		m := gmap.NewIntStrMapFrom(g.MapIntStr{
+			1: "v1",
+			2: "v2",
+			3: "v3",
+		})
+		t.Assert(m.String(), "{\"1\":\"v1\",\"2\":\"v2\",\"3\":\"v3\"}")
+
+		m = nil
+		t.Assert(len(m.String()), 0)
+	})
+}
+
+func Test_IntStrMap_DeepCopy(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		m := gmap.NewIntStrMapFrom(g.MapIntStr{
+			1: "val1",
+			2: "val2",
+		})
+		t.Assert(m.Size(), 2)
+
+		n := m.DeepCopy().(*gmap.IntStrMap)
+		n.Set(1, "v1")
+		t.AssertNE(m.Get(1), n.Get(1))
+	})
+}
+
+func Test_IntStrMap_IsSubOf(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		m1 := gmap.NewIntStrMapFrom(g.MapIntStr{
+			1: "v1",
+			2: "v2",
+		})
+		m2 := gmap.NewIntStrMapFrom(g.MapIntStr{
+			2: "v2",
+		})
+		t.Assert(m1.IsSubOf(m2), false)
+		t.Assert(m2.IsSubOf(m1), true)
+		t.Assert(m2.IsSubOf(m2), true)
+	})
+}
+
+func Test_IntStrMap_Diff(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		m1 := gmap.NewIntStrMapFrom(g.MapIntStr{
+			0: "0",
+			1: "1",
+			2: "2",
+			3: "3",
+		})
+		m2 := gmap.NewIntStrMapFrom(g.MapIntStr{
+			0: "0",
+			2: "2",
+			3: "31",
+			4: "4",
+		})
+		addedKeys, removedKeys, updatedKeys := m1.Diff(m2)
+		t.Assert(addedKeys, []int{4})
+		t.Assert(removedKeys, []int{1})
+		t.Assert(updatedKeys, []int{3})
 	})
 }

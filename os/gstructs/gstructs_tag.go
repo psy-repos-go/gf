@@ -62,7 +62,7 @@ func ParseTag(tag string) map[string]string {
 		tag = tag[i+1:]
 		value, err := strconv.Unquote(quotedValue)
 		if err != nil {
-			panic(err)
+			panic(gerror.WrapCodef(gcode.CodeInvalidParameter, err, `error parsing tag "%s"`, tag))
 		}
 		data[key] = gtag.Parse(value)
 	}
@@ -74,7 +74,7 @@ func ParseTag(tag string) map[string]string {
 // The parameter `pointer` should be type of struct/*struct.
 //
 // Note that,
-// 1. It only retrieves the exported attributes with first letter up-case from struct.
+// 1. It only retrieves the exported attributes with first letter upper-case from struct.
 // 2. The parameter `priority` should be given, it only retrieves fields that has given tag.
 func TagFields(pointer interface{}, priority []string) ([]Field, error) {
 	return getFieldValuesByTagPriority(pointer, priority, map[string]struct{}{})
@@ -85,8 +85,9 @@ func TagFields(pointer interface{}, priority []string) ([]Field, error) {
 // The parameter `pointer` should be type of struct/*struct.
 //
 // Note that,
-// 1. It only retrieves the exported attributes with first letter up-case from struct.
+// 1. It only retrieves the exported attributes with first letter upper-case from struct.
 // 2. The parameter `priority` should be given, it only retrieves fields that has given tag.
+// 3. If one field has no specified tag, it uses its field name as result map key.
 func TagMapName(pointer interface{}, priority []string) (map[string]string, error) {
 	fields, err := TagFields(pointer, priority)
 	if err != nil {
@@ -103,8 +104,9 @@ func TagMapName(pointer interface{}, priority []string) (map[string]string, erro
 // The parameter `object` should be either type of struct/*struct/[]struct/[]*struct.
 //
 // Note that,
-// 1. It only retrieves the exported attributes with first letter up-case from struct.
+// 1. It only retrieves the exported attributes with first letter upper-case from struct.
 // 2. The parameter `priority` should be given, it only retrieves fields that has given tag.
+// 3. If one field has no specified tag, it uses its field name as result map key.
 func TagMapField(object interface{}, priority []string) (map[string]Field, error) {
 	fields, err := TagFields(object, priority)
 	if err != nil {
@@ -118,16 +120,16 @@ func TagMapField(object interface{}, priority []string) (map[string]Field, error
 	return tagMap, nil
 }
 
-func getFieldValues(value interface{}) ([]Field, error) {
+func getFieldValues(structObject interface{}) ([]Field, error) {
 	var (
 		reflectValue reflect.Value
 		reflectKind  reflect.Kind
 	)
-	if v, ok := value.(reflect.Value); ok {
+	if v, ok := structObject.(reflect.Value); ok {
 		reflectValue = v
 		reflectKind = reflectValue.Kind()
 	} else {
-		reflectValue = reflect.ValueOf(value)
+		reflectValue = reflect.ValueOf(structObject)
 		reflectKind = reflectValue.Kind()
 	}
 	for {
@@ -174,13 +176,16 @@ exitLoop:
 	return fields, nil
 }
 
-func getFieldValuesByTagPriority(pointer interface{}, priority []string, tagMap map[string]struct{}) ([]Field, error) {
+func getFieldValuesByTagPriority(
+	pointer interface{}, priority []string, repeatedTagFilteringMap map[string]struct{},
+) ([]Field, error) {
 	fields, err := getFieldValues(pointer)
 	if err != nil {
 		return nil, err
 	}
 	var (
-		tagValue  = ""
+		tagName   string
+		tagValue  string
 		tagFields = make([]Field, 0)
 	)
 	for _, field := range fields {
@@ -190,6 +195,7 @@ func getFieldValuesByTagPriority(pointer interface{}, priority []string, tagMap 
 		}
 		tagValue = ""
 		for _, p := range priority {
+			tagName = p
 			tagValue = field.Tag(p)
 			if tagValue != "" && tagValue != "-" {
 				break
@@ -197,16 +203,18 @@ func getFieldValuesByTagPriority(pointer interface{}, priority []string, tagMap 
 		}
 		if tagValue != "" {
 			// Filter repeated tag.
-			if _, ok := tagMap[tagValue]; ok {
+			if _, ok := repeatedTagFilteringMap[tagValue]; ok {
 				continue
 			}
 			tagField := field
+			tagField.TagName = tagName
 			tagField.TagValue = tagValue
 			tagFields = append(tagFields, tagField)
 		}
 		// If this is an embedded attribute, it retrieves the tags recursively.
-		if field.IsEmbedded() {
-			if subTagFields, err := getFieldValuesByTagPriority(field.Value, priority, tagMap); err != nil {
+		if field.IsEmbedded() && field.OriginalKind() == reflect.Struct {
+			subTagFields, err := getFieldValuesByTagPriority(field.Value, priority, repeatedTagFilteringMap)
+			if err != nil {
 				return nil, err
 			} else {
 				tagFields = append(tagFields, subTagFields...)

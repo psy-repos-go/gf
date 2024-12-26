@@ -20,9 +20,13 @@ import (
 
 // Config is redis configuration.
 type Config struct {
-	Address         string        `json:"address"`         // It supports single and cluster redis server. Multiple addresses joined with char ','. Eg: 192.168.1.1:6379, 192.168.1.2:6379.
+	// Address It supports single and cluster redis server. Multiple addresses joined with char ','. Eg: 192.168.1.1:6379, 192.168.1.2:6379.
+	Address         string        `json:"address"`
 	Db              int           `json:"db"`              // Redis db.
+	User            string        `json:"user"`            // Username for AUTH.
 	Pass            string        `json:"pass"`            // Password for AUTH.
+	SentinelUser    string        `json:"sentinel_user"`   // Username for sentinel AUTH.
+	SentinelPass    string        `json:"sentinel_pass"`   // Password for sentinel AUTH.
 	MinIdle         int           `json:"minIdle"`         // Minimum number of connections allowed to be idle (default is 0)
 	MaxIdle         int           `json:"maxIdle"`         // Maximum number of connections allowed to be idle (default is 10)
 	MaxActive       int           `json:"maxActive"`       // Maximum number of connections limit (default is 0 means no limit).
@@ -30,12 +34,15 @@ type Config struct {
 	IdleTimeout     time.Duration `json:"idleTimeout"`     // Maximum idle time for connection (default is 10 seconds, not allowed to be set to 0)
 	WaitTimeout     time.Duration `json:"waitTimeout"`     // Timed out duration waiting to get a connection from the connection pool.
 	DialTimeout     time.Duration `json:"dialTimeout"`     // Dial connection timeout for TCP.
-	ReadTimeout     time.Duration `json:"readTimeout"`     // Read timeout for TCP.
+	ReadTimeout     time.Duration `json:"readTimeout"`     // Read timeout for TCP. DO NOT set it if not necessary.
 	WriteTimeout    time.Duration `json:"writeTimeout"`    // Write timeout for TCP.
 	MasterName      string        `json:"masterName"`      // Used in Redis Sentinel mode.
 	TLS             bool          `json:"tls"`             // Specifies whether TLS should be used when connecting to the server.
 	TLSSkipVerify   bool          `json:"tlsSkipVerify"`   // Disables server name verification when connecting over TLS.
 	TLSConfig       *tls.Config   `json:"-"`               // TLS Config to use. When set TLS will be negotiated.
+	SlaveOnly       bool          `json:"slaveOnly"`       // Route all commands to slave read-only nodes.
+	Cluster         bool          `json:"cluster"`         // Specifies whether cluster mode be used.
+	Protocol        int           `json:"protocol"`        // Specifies the RESP version (Protocol 2 or 3.)
 }
 
 const (
@@ -97,6 +104,9 @@ func ConfigFromMap(m map[string]interface{}) (config *Config, err error) {
 	}
 	if config.MaxConnLifetime < time.Second {
 		config.MaxConnLifetime = config.MaxConnLifetime * time.Second
+	}
+	if config.Protocol != 2 && config.Protocol != 3 {
+		config.Protocol = 3
 	}
 	return
 }

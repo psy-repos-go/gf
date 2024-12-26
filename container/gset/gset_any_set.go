@@ -16,6 +16,7 @@ import (
 	"github.com/gogf/gf/v2/util/gconv"
 )
 
+// Set is consisted of interface{} items.
 type Set struct {
 	mu   rwmutex.RWMutex
 	data map[interface{}]struct{}
@@ -53,9 +54,7 @@ func NewFrom(items interface{}, safe ...bool) *Set {
 // Iterator iterates the set readonly with given callback function `f`,
 // if `f` returns true then continue iterating; or false to stop.
 func (set *Set) Iterator(f func(v interface{}) bool) {
-	set.mu.RLock()
-	defer set.mu.RUnlock()
-	for k, _ := range set.data {
+	for _, k := range set.Slice() {
 		if !f(k) {
 			break
 		}
@@ -184,7 +183,7 @@ func (set *Set) Clear() {
 	set.mu.Unlock()
 }
 
-// Slice returns the a of items of the set as slice.
+// Slice returns all items of the set as slice.
 func (set *Set) Slice() []interface{} {
 	set.mu.RLock()
 	var (
@@ -211,7 +210,7 @@ func (set *Set) Join(glue string) string {
 		i      = 0
 		buffer = bytes.NewBuffer(nil)
 	)
-	for k, _ := range set.data {
+	for k := range set.data {
 		buffer.WriteString(gconv.String(k))
 		if i != l-1 {
 			buffer.WriteString(glue)
@@ -223,16 +222,19 @@ func (set *Set) Join(glue string) string {
 
 // String returns items as a string, which implements like json.Marshal does.
 func (set *Set) String() string {
+	if set == nil {
+		return ""
+	}
 	set.mu.RLock()
 	defer set.mu.RUnlock()
 	var (
-		s      = ""
+		s      string
 		l      = len(set.data)
 		i      = 0
 		buffer = bytes.NewBuffer(nil)
 	)
 	buffer.WriteByte('[')
-	for k, _ := range set.data {
+	for k := range set.data {
 		s = gconv.String(k)
 		if gstr.IsNumeric(s) {
 			buffer.WriteString(s)
@@ -413,7 +415,7 @@ func (set *Set) Merge(others ...*Set) *Set {
 func (set *Set) Sum() (sum int) {
 	set.mu.RLock()
 	defer set.mu.RUnlock()
-	for k, _ := range set.data {
+	for k := range set.data {
 		sum += gconv.Int(k)
 	}
 	return
@@ -423,7 +425,7 @@ func (set *Set) Sum() (sum int) {
 func (set *Set) Pop() interface{} {
 	set.mu.Lock()
 	defer set.mu.Unlock()
-	for k, _ := range set.data {
+	for k := range set.data {
 		delete(set.data, k)
 		return k
 	}
@@ -443,7 +445,7 @@ func (set *Set) Pops(size int) []interface{} {
 	}
 	index := 0
 	array := make([]interface{}, size)
-	for k, _ := range set.data {
+	for k := range set.data {
 		delete(set.data, k)
 		array[index] = k
 		index++
@@ -506,4 +508,18 @@ func (set *Set) UnmarshalValue(value interface{}) (err error) {
 		set.data[v] = struct{}{}
 	}
 	return
+}
+
+// DeepCopy implements interface for deep copy of current type.
+func (set *Set) DeepCopy() interface{} {
+	if set == nil {
+		return nil
+	}
+	set.mu.RLock()
+	defer set.mu.RUnlock()
+	data := make([]interface{}, 0)
+	for k := range set.data {
+		data = append(data, k)
+	}
+	return NewFrom(data, set.mu.IsSafe())
 }

@@ -1,15 +1,23 @@
+// Copyright GoFrame gf Author(https://goframe.org). All Rights Reserved.
+//
+// This Source Code Form is subject to the terms of the MIT License.
+// If a copy of the MIT was not distributed with this file,
+// You can obtain one at https://github.com/gogf/gf.
+
 package cmd
 
 import (
 	"bytes"
 	"context"
 
-	"github.com/gogf/gf/cmd/gf/v2/internal/utility/mlog"
+	"github.com/olekukonko/tablewriter"
+
 	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/os/gproc"
 	"github.com/gogf/gf/v2/text/gregex"
 	"github.com/gogf/gf/v2/text/gstr"
-	"github.com/olekukonko/tablewriter"
+
+	"github.com/gogf/gf/cmd/gf/v2/internal/utility/mlog"
 )
 
 var (
@@ -23,10 +31,11 @@ type cEnv struct {
 type cEnvInput struct {
 	g.Meta `name:"env"`
 }
+
 type cEnvOutput struct{}
 
 func (c cEnv) Index(ctx context.Context, in cEnvInput) (out *cEnvOutput, err error) {
-	result, err := gproc.ShellExec("go env")
+	result, err := gproc.ShellExec(ctx, "go env")
 	if err != nil {
 		mlog.Fatal(err)
 	}

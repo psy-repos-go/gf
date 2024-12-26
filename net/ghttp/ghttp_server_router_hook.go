@@ -15,7 +15,7 @@ import (
 )
 
 // BindHookHandler registers handler for specified hook.
-func (s *Server) BindHookHandler(pattern string, hook string, handler HandlerFunc) {
+func (s *Server) BindHookHandler(pattern string, hook HookName, handler HandlerFunc) {
 	s.doBindHookHandler(context.TODO(), doBindHookHandlerInput{
 		Prefix:   "",
 		Pattern:  pattern,
@@ -25,21 +25,23 @@ func (s *Server) BindHookHandler(pattern string, hook string, handler HandlerFun
 	})
 }
 
+// doBindHookHandlerInput is the input for BindHookHandler.
 type doBindHookHandlerInput struct {
 	Prefix   string
 	Pattern  string
-	HookName string
+	HookName HookName
 	Handler  HandlerFunc
 	Source   string
 }
 
+// doBindHookHandler is the internal handler for BindHookHandler.
 func (s *Server) doBindHookHandler(ctx context.Context, in doBindHookHandlerInput) {
 	s.setHandler(
 		ctx,
 		setHandlerInput{
 			Prefix:  in.Prefix,
 			Pattern: in.Pattern,
-			HandlerItem: &handlerItem{
+			HandlerItem: &HandlerItem{
 				Type: HandlerTypeHook,
 				Name: gdebug.FuncPath(in.Handler),
 				Info: handlerFuncInfo{
@@ -53,14 +55,18 @@ func (s *Server) doBindHookHandler(ctx context.Context, in doBindHookHandlerInpu
 	)
 }
 
-func (s *Server) BindHookHandlerByMap(pattern string, hookMap map[string]HandlerFunc) {
+// BindHookHandlerByMap registers handler for specified hook.
+func (s *Server) BindHookHandlerByMap(pattern string, hookMap map[HookName]HandlerFunc) {
 	for k, v := range hookMap {
 		s.BindHookHandler(pattern, k, v)
 	}
 }
 
 // callHookHandler calls the hook handler by their registered sequences.
-func (s *Server) callHookHandler(hook string, r *Request) {
+func (s *Server) callHookHandler(hook HookName, r *Request) {
+	if !r.hasHookHandler {
+		return
+	}
 	hookItems := r.getHookHandlers(hook)
 	if len(hookItems) > 0 {
 		// Backup the old router variable map.
@@ -90,11 +96,8 @@ func (s *Server) callHookHandler(hook string, r *Request) {
 }
 
 // getHookHandlers retrieves and returns the hook handlers of specified hook.
-func (r *Request) getHookHandlers(hook string) []*handlerParsedItem {
-	if !r.hasHookHandler {
-		return nil
-	}
-	parsedItems := make([]*handlerParsedItem, 0, 4)
+func (r *Request) getHookHandlers(hook HookName) []*HandlerItemParsed {
+	parsedItems := make([]*HandlerItemParsed, 0, 4)
 	for _, v := range r.handlers {
 		if v.Handler.HookName != hook {
 			continue

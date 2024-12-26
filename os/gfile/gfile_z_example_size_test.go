@@ -15,8 +15,8 @@ import (
 func ExampleSize() {
 	// init
 	var (
-		fileName = "gflie_example.txt"
-		tempDir  = gfile.TempDir("gfile_example_size")
+		fileName = "gfile_example.txt"
+		tempDir  = gfile.Temp("gfile_example_size")
 		tempFile = gfile.Join(tempDir, fileName)
 	)
 
@@ -31,8 +31,8 @@ func ExampleSize() {
 func ExampleSizeFormat() {
 	// init
 	var (
-		fileName = "gflie_example.txt"
-		tempDir  = gfile.TempDir("gfile_example_size")
+		fileName = "gfile_example.txt"
+		tempDir  = gfile.Temp("gfile_example_size")
 		tempFile = gfile.Join(tempDir, fileName)
 	)
 
@@ -47,8 +47,8 @@ func ExampleSizeFormat() {
 func ExampleReadableSize() {
 	// init
 	var (
-		fileName = "gflie_example.txt"
-		tempDir  = gfile.TempDir("gfile_example_size")
+		fileName = "gfile_example.txt"
+		tempDir  = gfile.Temp("gfile_example_size")
 		tempFile = gfile.Join(tempDir, fileName)
 	)
 

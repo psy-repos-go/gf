@@ -16,6 +16,7 @@ import (
 	"github.com/gogf/gf/v2/os/gtime"
 	"github.com/gogf/gf/v2/test/gtest"
 	"github.com/gogf/gf/v2/util/gconv"
+	"github.com/gogf/gf/v2/util/guid"
 )
 
 func Test_IsDir(t *testing.T) {
@@ -69,8 +70,17 @@ func Test_Create(t *testing.T) {
 			fileobj, err = gfile.Create(testpath() + v)
 			defer delTestFiles(v)
 			fileobj.Close()
-			t.Assert(err, nil)
+			t.AssertNil(err)
 		}
+	})
+
+	gtest.C(t, func(t *gtest.T) {
+		tmpPath := gfile.Join(gfile.Temp(), "test/testfile_cc1.txt")
+		fileobj, err := gfile.Create(tmpPath)
+		defer gfile.Remove(tmpPath)
+		t.AssertNE(fileobj, nil)
+		t.AssertNil(err)
+		fileobj.Close()
 	})
 }
 
@@ -97,7 +107,7 @@ func Test_Open(t *testing.T) {
 			fileobj, err = gfile.Open(testpath() + v)
 			fileobj.Close()
 			if flags[k] {
-				t.Assert(err, nil)
+				t.AssertNil(err)
 			} else {
 				t.AssertNE(err, nil)
 			}
@@ -130,7 +140,7 @@ func Test_OpenFile(t *testing.T) {
 			fileobj, err = gfile.OpenFile(testpath()+v, os.O_RDWR, 0666)
 			fileobj.Close()
 			if flags[k] {
-				t.Assert(err, nil)
+				t.AssertNil(err)
 			} else {
 				t.AssertNE(err, nil)
 			}
@@ -162,7 +172,7 @@ func Test_OpenWithFlag(t *testing.T) {
 			fileobj, err = gfile.OpenWithFlag(testpath()+v, os.O_RDWR)
 			fileobj.Close()
 			if flags[k] {
-				t.Assert(err, nil)
+				t.AssertNil(err)
 			} else {
 				t.AssertNE(err, nil)
 			}
@@ -193,7 +203,7 @@ func Test_OpenWithFlagPerm(t *testing.T) {
 			fileobj, err = gfile.OpenWithFlagPerm(testpath()+v, os.O_RDWR, 0666)
 			fileobj.Close()
 			if flags[k] {
-				t.Assert(err, nil)
+				t.AssertNil(err)
 			} else {
 				t.AssertNE(err, nil)
 			}
@@ -204,7 +214,6 @@ func Test_OpenWithFlagPerm(t *testing.T) {
 }
 
 func Test_Exists(t *testing.T) {
-
 	gtest.C(t, func(t *gtest.T) {
 		var (
 			flag  bool
@@ -238,7 +247,7 @@ func Test_Exists(t *testing.T) {
 func Test_Pwd(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
 		paths, err := os.Getwd()
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(gfile.Pwd(), paths)
 
 	})
@@ -292,10 +301,10 @@ func Test_Info(t *testing.T) {
 		createTestFile(paths, "")
 		defer delTestFiles(paths)
 		files, err = gfile.Stat(testpath() + paths)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 
 		files2, err = os.Stat(testpath() + paths)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 
 		t.Assert(files, files2)
 
@@ -370,7 +379,7 @@ func Test_DirNames(t *testing.T) {
 
 		readlist, err = gfile.DirNames(testpath() + paths)
 
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.AssertIN(readlist, havelist)
 
 		_, err = gfile.DirNames("")
@@ -406,16 +415,16 @@ func Test_Glob(t *testing.T) {
 		defer delTestFiles(dirpath)
 
 		resultlist, err = gfile.Glob(testpath()+paths, true)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(resultlist, havelist1)
 
 		resultlist, err = gfile.Glob(testpath()+paths, false)
 
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(formatpaths(resultlist), formatpaths(havelist2))
 
 		_, err = gfile.Glob("", true)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 
 	})
 }
@@ -571,6 +580,7 @@ func Test_Dir(t *testing.T) {
 
 		t.Assert(readlPath, testpath())
 
+		t.Assert(len(gfile.Dir(".")) > 0, true)
 	})
 }
 
@@ -609,11 +619,7 @@ func Test_ExtName(t *testing.T) {
 
 func Test_TempDir(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
-		if gfile.Separator != "/" || !gfile.Exists("/tmp") {
-			t.Assert(gfile.TempDir(), os.TempDir())
-		} else {
-			t.Assert(gfile.TempDir(), "/tmp")
-		}
+		t.Assert(gfile.Temp(), os.TempDir())
 	})
 }
 
@@ -627,13 +633,13 @@ func Test_Mkdir(t *testing.T) {
 		defer delTestFiles("/testfile")
 
 		err = gfile.Mkdir(testpath() + tpath)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 
 		err = gfile.Mkdir("")
 		t.AssertNE(err, nil)
 
 		err = gfile.Mkdir(testpath() + tpath + "2/t1")
-		t.Assert(err, nil)
+		t.AssertNil(err)
 
 	})
 }
@@ -651,7 +657,7 @@ func Test_Stat(t *testing.T) {
 		defer delTestFiles(tpath1)
 
 		fileiofo, err = gfile.Stat(testpath() + tpath1)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 
 		t.Assert(fileiofo.Size(), 1)
 
@@ -665,5 +671,57 @@ func Test_MainPkgPath(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
 		reads := gfile.MainPkgPath()
 		t.Assert(reads, "")
+	})
+}
+
+func Test_SelfName(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		t.Assert(len(gfile.SelfName()) > 0, true)
+	})
+}
+
+func Test_MTimestamp(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		t.Assert(gfile.MTimestamp(gfile.Temp()) > 0, true)
+	})
+}
+
+func Test_RemoveFile_RemoveAll(t *testing.T) {
+	// safe deleting single file.
+	gtest.C(t, func(t *gtest.T) {
+		path := gfile.Temp(guid.S())
+		err := gfile.PutContents(path, "1")
+		t.AssertNil(err)
+		t.Assert(gfile.Exists(path), true)
+
+		err = gfile.RemoveFile(path)
+		t.AssertNil(err)
+		t.Assert(gfile.Exists(path), false)
+	})
+	// error deleting dir which is not empty.
+	gtest.C(t, func(t *gtest.T) {
+		var (
+			err       error
+			dirPath   = gfile.Temp(guid.S())
+			filePath1 = gfile.Join(dirPath, guid.S())
+			filePath2 = gfile.Join(dirPath, guid.S())
+		)
+		err = gfile.PutContents(filePath1, "1")
+		t.AssertNil(err)
+		t.Assert(gfile.Exists(filePath1), true)
+
+		err = gfile.PutContents(filePath2, "2")
+		t.AssertNil(err)
+		t.Assert(gfile.Exists(filePath2), true)
+
+		err = gfile.RemoveFile(dirPath)
+		t.AssertNE(err, nil)
+		t.Assert(gfile.Exists(filePath1), true)
+		t.Assert(gfile.Exists(filePath2), true)
+
+		err = gfile.RemoveAll(dirPath)
+		t.AssertNil(err)
+		t.Assert(gfile.Exists(filePath1), false)
+		t.Assert(gfile.Exists(filePath2), false)
 	})
 }

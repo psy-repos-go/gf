@@ -16,8 +16,8 @@ import (
 func ExampleReplaceFile() {
 	// init
 	var (
-		fileName = "gflie_example.txt"
-		tempDir  = gfile.TempDir("gfile_example_replace")
+		fileName = "gfile_example.txt"
+		tempDir  = gfile.Temp("gfile_example_replace")
 		tempFile = gfile.Join(tempDir, fileName)
 	)
 
@@ -40,8 +40,8 @@ func ExampleReplaceFile() {
 func ExampleReplaceFileFunc() {
 	// init
 	var (
-		fileName = "gflie_example.txt"
-		tempDir  = gfile.TempDir("gfile_example_replace")
+		fileName = "gfile_example.txt"
+		tempDir  = gfile.Temp("gfile_example_replace")
 		tempFile = gfile.Join(tempDir, fileName)
 	)
 
@@ -68,8 +68,8 @@ func ExampleReplaceFileFunc() {
 func ExampleReplaceDir() {
 	// init
 	var (
-		fileName = "gflie_example.txt"
-		tempDir  = gfile.TempDir("gfile_example_replace")
+		fileName = "gfile_example.txt"
+		tempDir  = gfile.Temp("gfile_example_replace")
 		tempFile = gfile.Join(tempDir, fileName)
 	)
 
@@ -80,7 +80,7 @@ func ExampleReplaceDir() {
 	fmt.Println(gfile.GetContents(tempFile))
 
 	// It replaces content of all files under specified directory recursively.
-	gfile.ReplaceDir("content", "replace word", tempDir, "gflie_example.txt", true)
+	gfile.ReplaceDir("content", "replace word", tempDir, "gfile_example.txt", true)
 
 	// read contents
 	fmt.Println(gfile.GetContents(tempFile))
@@ -93,8 +93,8 @@ func ExampleReplaceDir() {
 func ExampleReplaceDirFunc() {
 	// init
 	var (
-		fileName = "gflie_example.txt"
-		tempDir  = gfile.TempDir("gfile_example_replace")
+		fileName = "gfile_example.txt"
+		tempDir  = gfile.Temp("gfile_example_replace")
 		tempFile = gfile.Join(tempDir, fileName)
 	)
 
@@ -109,7 +109,7 @@ func ExampleReplaceDirFunc() {
 		// Replace with regular match
 		reg, _ := regexp.Compile(`\d{3}`)
 		return reg.ReplaceAllString(content, "[num]")
-	}, tempDir, "gflie_example.txt", true)
+	}, tempDir, "gfile_example.txt", true)
 
 	fmt.Println(gfile.GetContents(tempFile))
 

@@ -39,7 +39,7 @@ func Test_CustomRule1(t *testing.T) {
 		err := g.Validator().Data("123456").Rules(rule).Messages("custom message").Run(ctx)
 		t.Assert(err.String(), "custom message")
 		err = g.Validator().Data("123456").Assoc(g.Map{"data": "123456"}).Rules(rule).Messages("custom message").Run(ctx)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 	})
 	// Error with struct validation.
 	gtest.C(t, func(t *gtest.T) {
@@ -65,7 +65,7 @@ func Test_CustomRule1(t *testing.T) {
 			Data:  "123456",
 		}
 		err := g.Validator().Data(st).Run(ctx)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 	})
 }
 
@@ -108,7 +108,7 @@ func Test_CustomRule2(t *testing.T) {
 			Data:  "123456",
 		}
 		err := g.Validator().Data(st).Run(ctx)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 	})
 }
 
@@ -139,7 +139,7 @@ func Test_CustomRule_AllowEmpty(t *testing.T) {
 			Data:  "123456",
 		}
 		err := g.Validator().Data(st).Run(ctx)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 	})
 	// No error with struct validation.
 	gtest.C(t, func(t *gtest.T) {
@@ -287,4 +287,26 @@ func Test_CustomRule_Overwrite(t *testing.T) {
 		t.Assert(g.Validator().Rules(rule).Data(1).Run(ctx), "2")
 	})
 	g.Dump(gvalid.GetRegisteredRuleMap())
+}
+
+func Test_Issue2499(t *testing.T) {
+	ruleName := "required"
+	ruleFunc := func(ctx context.Context, in gvalid.RuleFuncInput) error {
+		return errors.New(in.Message)
+	}
+	gtest.C(t, func(t *gtest.T) {
+		type T struct {
+			Value string `v:"uid@required"`
+			Data  string `p:"data"`
+		}
+		st := &T{
+			Value: "",
+			Data:  "123456",
+		}
+		err := g.Validator().
+			RuleFuncMap(map[string]gvalid.RuleFunc{
+				ruleName: ruleFunc,
+			}).Data(st).Run(ctx)
+		t.Assert(err.String(), `The uid field is required`)
+	})
 }

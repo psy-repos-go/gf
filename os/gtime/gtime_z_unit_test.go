@@ -15,10 +15,11 @@ import (
 	"github.com/gogf/gf/v2/test/gtest"
 )
 
-func Test_SetTimeZone(t *testing.T) {
+func Test_TimestampStr(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
-		t.Assert(gtime.SetTimeZone("Asia/Shanghai"), nil)
-		// t.Assert(time.Local.String(), "Asia/Shanghai")
+		t.AssertGT(len(gtime.TimestampMilliStr()), 0)
+		t.AssertGT(len(gtime.TimestampMicroStr()), 0)
+		t.AssertGT(len(gtime.TimestampNanoStr()), 0)
 	})
 }
 
@@ -69,6 +70,14 @@ func Test_Datetime(t *testing.T) {
 		}
 		t.Assert(datetime, timeTemp.Time.Format("2006-01-02 15:04:05"))
 	})
+	gtest.C(t, func(t *gtest.T) {
+		timeTemp, err := gtime.StrToTime("")
+		t.AssertNil(err)
+		t.AssertLT(timeTemp.Unix(), 0)
+		timeTemp, err = gtime.StrToTime("2006-01")
+		t.AssertNE(err, nil)
+		t.Assert(timeTemp, nil)
+	})
 }
 
 func Test_ISO8601(t *testing.T) {
@@ -94,9 +103,9 @@ func Test_StrToTime(t *testing.T) {
 			"2006.01.02 15:04:05.000",
 			"2006.01.02 - 15:04:05",
 			"2006.01.02 15:04:05 +0800 CST",
-			"2006-01-02T20:05:06+05:01:01",
-			"2006-01-02T14:03:04Z01:01:01",
-			"2006-01-02T15:04:05Z",
+			"2006-01-02T12:05:05+05:01",
+			"2006-01-02T02:03:05-05:01",
+			"2006-01-02T15:04:05",
 			"02-jan-2006 15:04:05",
 			"02/jan/2006 15:04:05",
 			"02.jan.2006 15:04:05",
@@ -105,11 +114,11 @@ func Test_StrToTime(t *testing.T) {
 
 		for _, item := range testDateTimes {
 			timeTemp, err := gtime.StrToTime(item)
-			t.Assert(err, nil)
-			t.Assert(timeTemp.Time.Format("2006-01-02 15:04:05"), "2006-01-02 15:04:05")
+			t.AssertNil(err)
+			t.Assert(timeTemp.Time.Local().Format("2006-01-02 15:04:05"), "2006-01-02 15:04:05")
 		}
 
-		// Correct date string,.
+		// Correct date string.
 		var testDates = []string{
 			"2006.01.02",
 			"2006.01.02 00:00",
@@ -118,7 +127,7 @@ func Test_StrToTime(t *testing.T) {
 
 		for _, item := range testDates {
 			timeTemp, err := gtime.StrToTime(item)
-			t.Assert(err, nil)
+			t.AssertNil(err)
 			t.Assert(timeTemp.Time.Format("2006-01-02 15:04:05"), "2006-01-02 00:00:00")
 		}
 
@@ -130,9 +139,9 @@ func Test_StrToTime(t *testing.T) {
 
 		for k, v := range testTimes {
 			time1, err := gtime.StrToTime(k)
-			t.Assert(err, nil)
+			t.AssertNil(err)
 			time2, err := time.ParseInLocation(v, k, time.Local)
-			t.Assert(err, nil)
+			t.AssertNil(err)
 			t.Assert(time1.Time, time2)
 		}
 
@@ -232,22 +241,22 @@ func Test_ConvertZone(t *testing.T) {
 func Test_ParseDuration(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
 		d, err := gtime.ParseDuration("1d")
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(d.String(), "24h0m0s")
 	})
 	gtest.C(t, func(t *gtest.T) {
 		d, err := gtime.ParseDuration("1d2h3m")
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(d.String(), "26h3m0s")
 	})
 	gtest.C(t, func(t *gtest.T) {
 		d, err := gtime.ParseDuration("-1d2h3m")
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(d.String(), "-26h3m0s")
 	})
 	gtest.C(t, func(t *gtest.T) {
 		d, err := gtime.ParseDuration("3m")
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(d.String(), "3m0s")
 	})
 	// error

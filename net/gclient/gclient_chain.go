@@ -8,10 +8,15 @@ package gclient
 
 import (
 	"time"
+
+	"github.com/gogf/gf/v2/net/gsvc"
 )
 
 // Prefix is a chaining function,
 // which sets the URL prefix for next request of this client.
+// Eg:
+// Prefix("http://127.0.0.1:8199/api/v1")
+// Prefix("http://127.0.0.1:8199/api/v2")
 func (c *Client) Prefix(prefix string) *Client {
 	newClient := c.Clone()
 	newClient.SetPrefix(prefix)
@@ -31,6 +36,14 @@ func (c *Client) Header(m map[string]string) *Client {
 func (c *Client) HeaderRaw(headers string) *Client {
 	newClient := c.Clone()
 	newClient.SetHeaderRaw(headers)
+	return newClient
+}
+
+// Discovery is a chaining function, which sets the discovery for client.
+// You can use `Discovery(nil)` to disable discovery feature for current client.
+func (c *Client) Discovery(discovery gsvc.Discovery) *Client {
+	newClient := c.Clone()
+	newClient.SetDiscovery(discovery)
 	return newClient
 }
 
@@ -88,6 +101,7 @@ func (c *Client) BasicAuth(user, pass string) *Client {
 
 // Retry is a chaining function,
 // which sets retry count and interval when failure for next request.
+// TODO removed.
 func (c *Client) Retry(retryCount int, retryInterval time.Duration) *Client {
 	newClient := c.Clone()
 	newClient.SetRetry(retryCount, retryInterval)
@@ -110,5 +124,12 @@ func (c *Client) Proxy(proxyURL string) *Client {
 func (c *Client) RedirectLimit(redirectLimit int) *Client {
 	newClient := c.Clone()
 	newClient.SetRedirectLimit(redirectLimit)
+	return newClient
+}
+
+// NoUrlEncode sets the mark that do not encode the parameters before sending request.
+func (c *Client) NoUrlEncode() *Client {
+	newClient := c.Clone()
+	newClient.SetNoUrlEncode(true)
 	return newClient
 }

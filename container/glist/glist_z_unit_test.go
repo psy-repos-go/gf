@@ -291,7 +291,7 @@ func TestRemove(t *testing.T) {
 	})
 }
 
-func TestIssue4103(t *testing.T) {
+func Test_Issue4103(t *testing.T) {
 	l1 := New()
 	l1.PushBack(1)
 	l1.PushBack(2)
@@ -312,7 +312,7 @@ func TestIssue4103(t *testing.T) {
 	}
 }
 
-func TestIssue6349(t *testing.T) {
+func Test_Issue6349(t *testing.T) {
 	l := New()
 	l.PushBack(1)
 	l.PushBack(2)
@@ -631,10 +631,7 @@ func TestList_IteratorAsc(t *testing.T) {
 		l.PushFronts(a1)
 		e1 := l.Back()
 		fun1 := func(e *Element) bool {
-			if gconv.Int(e1.Value) > 2 {
-				return true
-			}
-			return false
+			return gconv.Int(e1.Value) > 2
 		}
 		checkList(t, l, []interface{}{4, 3, 6, 5, 2, 1})
 		l.IteratorAsc(fun1)
@@ -649,10 +646,7 @@ func TestList_IteratorDesc(t *testing.T) {
 		l.PushFronts(a1)
 		e1 := l.Back()
 		fun1 := func(e *Element) bool {
-			if gconv.Int(e1.Value) > 6 {
-				return true
-			}
-			return false
+			return gconv.Int(e1.Value) > 6
 		}
 		l.IteratorDesc(fun1)
 		t.Assert(l.Len(), 4)
@@ -667,10 +661,7 @@ func TestList_Iterator(t *testing.T) {
 		l.PushFronts(a1)
 		e1 := l.Back()
 		fun1 := func(e *Element) bool {
-			if gconv.String(e1.Value) > "c" {
-				return true
-			}
-			return false
+			return gconv.String(e1.Value) > "c"
 		}
 		checkList(t, l, []interface{}{"e", "d", "c", "b", "a"})
 		l.Iterator(fun1)
@@ -709,20 +700,20 @@ func TestList_Json(t *testing.T) {
 		a := []interface{}{"a", "b", "c"}
 		l := New()
 		b, err := json.Marshal(a)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 
 		err = json.UnmarshalUseNumber(b, l)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(l.FrontAll(), a)
 	})
 	gtest.C(t, func(t *gtest.T) {
 		var l List
 		a := []interface{}{"a", "b", "c"}
 		b, err := json.Marshal(a)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 
 		err = json.UnmarshalUseNumber(b, &l)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(l.FrontAll(), a)
 	})
 }
@@ -739,7 +730,7 @@ func TestList_UnmarshalValue(t *testing.T) {
 			"name": "john",
 			"list": []byte(`[1,2,3]`),
 		}, &tlist)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(tlist.Name, "john")
 		t.Assert(tlist.List.FrontAll(), []interface{}{1, 2, 3})
 	})
@@ -750,8 +741,18 @@ func TestList_UnmarshalValue(t *testing.T) {
 			"name": "john",
 			"list": []interface{}{1, 2, 3},
 		}, &tlist)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(tlist.Name, "john")
 		t.Assert(tlist.List.FrontAll(), []interface{}{1, 2, 3})
+	})
+}
+
+func TestList_DeepCopy(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		l := NewFrom([]interface{}{1, 2, "a", `"b"`, `\c`})
+		copyList := l.DeepCopy()
+		cl := copyList.(*List)
+		cl.PopBack()
+		t.AssertNE(l.Size(), cl.Size())
 	})
 }

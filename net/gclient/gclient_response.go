@@ -7,7 +7,8 @@
 package gclient
 
 import (
-	"io/ioutil"
+	"bytes"
+	"io"
 	"net/http"
 
 	"github.com/gogf/gf/v2/internal/intlog"
@@ -26,7 +27,7 @@ func (r *Response) initCookie() {
 	if r.cookies == nil {
 		r.cookies = make(map[string]string)
 		// Response might be nil.
-		if r != nil && r.Response != nil {
+		if r.Response != nil {
 			for _, v := range r.Cookies() {
 				r.cookies[v.Name] = v.Value
 			}
@@ -56,9 +57,9 @@ func (r *Response) ReadAll() []byte {
 	if r == nil || r.Response == nil {
 		return []byte{}
 	}
-	body, err := ioutil.ReadAll(r.Response.Body)
+	body, err := io.ReadAll(r.Response.Body)
 	if err != nil {
-		intlog.Error(r.request.Context(), err)
+		intlog.Errorf(r.request.Context(), `%+v`, err)
 		return nil
 	}
 	return body
@@ -69,11 +70,17 @@ func (r *Response) ReadAllString() string {
 	return string(r.ReadAll())
 }
 
+// SetBodyContent overwrites response content with custom one.
+func (r *Response) SetBodyContent(content []byte) {
+	buffer := bytes.NewBuffer(content)
+	r.Body = io.NopCloser(buffer)
+	r.ContentLength = int64(buffer.Len())
+}
+
 // Close closes the response when it will never be used.
 func (r *Response) Close() error {
-	if r == nil || r.Response == nil || r.Response.Close {
+	if r == nil || r.Response == nil {
 		return nil
 	}
-	r.Response.Close = true
 	return r.Response.Body.Close()
 }

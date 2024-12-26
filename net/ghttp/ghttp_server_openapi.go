@@ -9,8 +9,7 @@ package ghttp
 import (
 	"context"
 
-	"github.com/gogf/gf/v2/internal/intlog"
-	"github.com/gogf/gf/v2/protocol/goai"
+	"github.com/gogf/gf/v2/net/goai"
 	"github.com/gogf/gf/v2/text/gstr"
 )
 
@@ -20,27 +19,29 @@ func (s *Server) initOpenApi() {
 		return
 	}
 	var (
-		ctx    = context.TODO()
-		err    error
-		method string
+		ctx     = context.TODO()
+		err     error
+		methods []string
 	)
 	for _, item := range s.GetRoutes() {
 		switch item.Type {
 		case HandlerTypeMiddleware, HandlerTypeHook:
 			continue
 		}
-		method = item.Method
-		if gstr.Equal(method, defaultMethod) {
-			method = ""
-		}
-		if item.Handler.Info.Func == nil {
-			err = s.openapi.Add(goai.AddInput{
-				Path:   item.Route,
-				Method: method,
-				Object: item.Handler.Info.Value.Interface(),
-			})
-			if err != nil {
-				s.Logger().Fatalf(ctx, `%+v`, err)
+		if item.Handler.Info.IsStrictRoute {
+			methods = []string{item.Method}
+			if gstr.Equal(item.Method, defaultMethod) {
+				methods = SupportedMethods()
+			}
+			for _, method := range methods {
+				err = s.openapi.Add(goai.AddInput{
+					Path:   item.Route,
+					Method: method,
+					Object: item.Handler.Info.Value.Interface(),
+				})
+				if err != nil {
+					s.Logger().Fatalf(ctx, `%+v`, err)
+				}
 			}
 		}
 	}
@@ -48,16 +49,9 @@ func (s *Server) initOpenApi() {
 
 // openapiSpec is a build-in handler automatic producing for openapi specification json file.
 func (s *Server) openapiSpec(r *Request) {
-	var (
-		err error
-	)
 	if s.config.OpenApiPath == "" {
 		r.Response.Write(`OpenApi specification file producing is disabled`)
 	} else {
-		err = r.Response.WriteJson(s.openapi)
-	}
-
-	if err != nil {
-		intlog.Error(r.Context(), err)
+		r.Response.WriteJson(s.openapi)
 	}
 }

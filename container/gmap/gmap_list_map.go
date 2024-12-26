@@ -7,14 +7,25 @@
 package gmap
 
 import (
+	"bytes"
+	"fmt"
+
 	"github.com/gogf/gf/v2/container/glist"
 	"github.com/gogf/gf/v2/container/gvar"
+	"github.com/gogf/gf/v2/internal/deepcopy"
 	"github.com/gogf/gf/v2/internal/empty"
 	"github.com/gogf/gf/v2/internal/json"
 	"github.com/gogf/gf/v2/internal/rwmutex"
 	"github.com/gogf/gf/v2/util/gconv"
 )
 
+// ListMap is a map that preserves insertion-order.
+//
+// It is backed by a hash table to store values and doubly-linked list to store ordering.
+//
+// Structure is not thread safe.
+//
+// Reference: http://en.wikipedia.org/wiki/Associative_array
 type ListMap struct {
 	mu   rwmutex.RWMutex
 	data map[interface{}]*glist.Element
@@ -58,7 +69,7 @@ func (m *ListMap) IteratorAsc(f func(key interface{}, value interface{}) bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.list != nil {
-		node := (*gListMapNode)(nil)
+		var node *gListMapNode
 		m.list.IteratorAsc(func(e *glist.Element) bool {
 			node = e.Value.(*gListMapNode)
 			return f(node.key, node.value)
@@ -72,7 +83,7 @@ func (m *ListMap) IteratorDesc(f func(key interface{}, value interface{}) bool) 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.list != nil {
-		node := (*gListMapNode)(nil)
+		var node *gListMapNode
 		m.list.IteratorDesc(func(e *glist.Element) bool {
 			node = e.Value.(*gListMapNode)
 			return f(node.key, node.value)
@@ -146,8 +157,10 @@ func (m *ListMap) MapStrAny() map[string]interface{} {
 func (m *ListMap) FilterEmpty() {
 	m.mu.Lock()
 	if m.list != nil {
-		keys := make([]interface{}, 0)
-		node := (*gListMapNode)(nil)
+		var (
+			keys = make([]interface{}, 0)
+			node *gListMapNode
+		)
 		m.list.IteratorAsc(func(e *glist.Element) bool {
 			node = e.Value.(*gListMapNode)
 			if empty.IsEmpty(node.value) {
@@ -495,7 +508,7 @@ func (m *ListMap) Merge(other *ListMap) {
 		other.mu.RLock()
 		defer other.mu.RUnlock()
 	}
-	node := (*gListMapNode)(nil)
+	var node *gListMapNode
 	other.list.IteratorAsc(func(e *glist.Element) bool {
 		node = e.Value.(*gListMapNode)
 		if e, ok := m.data[node.key]; !ok {
@@ -509,13 +522,34 @@ func (m *ListMap) Merge(other *ListMap) {
 
 // String returns the map as a string.
 func (m *ListMap) String() string {
+	if m == nil {
+		return ""
+	}
 	b, _ := m.MarshalJSON()
 	return string(b)
 }
 
 // MarshalJSON implements the interface MarshalJSON for json.Marshal.
-func (m ListMap) MarshalJSON() ([]byte, error) {
-	return json.Marshal(gconv.Map(m.Map()))
+func (m ListMap) MarshalJSON() (jsonBytes []byte, err error) {
+	if m.data == nil {
+		return []byte("null"), nil
+	}
+	buffer := bytes.NewBuffer(nil)
+	buffer.WriteByte('{')
+	m.Iterator(func(key, value interface{}) bool {
+		valueBytes, valueJsonErr := json.Marshal(value)
+		if valueJsonErr != nil {
+			err = valueJsonErr
+			return false
+		}
+		if buffer.Len() > 1 {
+			buffer.WriteByte(',')
+		}
+		buffer.WriteString(fmt.Sprintf(`"%v":%s`, key, valueBytes))
+		return true
+	})
+	buffer.WriteByte('}')
+	return buffer.Bytes(), nil
 }
 
 // UnmarshalJSON implements the interface UnmarshalJSON for json.Unmarshal.
@@ -556,4 +590,23 @@ func (m *ListMap) UnmarshalValue(value interface{}) (err error) {
 		}
 	}
 	return
+}
+
+// DeepCopy implements interface for deep copy of current type.
+func (m *ListMap) DeepCopy() interface{} {
+	if m == nil {
+		return nil
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	data := make(map[interface{}]interface{}, len(m.data))
+	if m.list != nil {
+		var node *gListMapNode
+		m.list.IteratorAsc(func(e *glist.Element) bool {
+			node = e.Value.(*gListMapNode)
+			data[node.key] = deepcopy.Copy(node.value)
+			return true
+		})
+	}
+	return NewListMapFrom(data, m.mu.IsSafe())
 }

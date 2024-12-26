@@ -164,6 +164,15 @@ func LoadKeyCrt(crtFile, keyFile string) (*tls.Config, error) {
 	return tlsConfig, nil
 }
 
+// MustGetFreePort performs as GetFreePort, but it panics is any error occurs.
+func MustGetFreePort() int {
+	port, err := GetFreePort()
+	if err != nil {
+		panic(err)
+	}
+	return port
+}
+
 // GetFreePort retrieves and returns a port that is free.
 func GetFreePort() (port int, err error) {
 	var (
@@ -187,7 +196,13 @@ func GetFreePort() (port int, err error) {
 		)
 	}
 	port = l.Addr().(*net.TCPAddr).Port
-	_ = l.Close()
+	if err = l.Close(); err != nil {
+		err = gerror.Wrapf(
+			err,
+			`close listening failed for network "%s", address "%s", port "%d"`,
+			network, resolvedAddr.String(), port,
+		)
+	}
 	return
 }
 

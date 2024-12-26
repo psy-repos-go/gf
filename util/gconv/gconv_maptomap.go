@@ -11,50 +11,26 @@ import (
 
 	"github.com/gogf/gf/v2/errors/gcode"
 	"github.com/gogf/gf/v2/errors/gerror"
-	"github.com/gogf/gf/v2/internal/json"
 )
 
 // MapToMap converts any map type variable `params` to another map type variable `pointer`
 // using reflect.
 // See doMapToMap.
 func MapToMap(params interface{}, pointer interface{}, mapping ...map[string]string) error {
-	return doMapToMap(params, pointer, mapping...)
+	return Scan(params, pointer, mapping...)
 }
 
 // doMapToMap converts any map type variable `params` to another map type variable `pointer`.
 //
 // The parameter `params` can be any type of map, like:
-// map[string]string, map[string]struct, map[string]*struct, etc.
+// map[string]string, map[string]struct, map[string]*struct, reflect.Value, etc.
 //
 // The parameter `pointer` should be type of *map, like:
-// map[int]string, map[string]struct, map[string]*struct, etc.
+// map[int]string, map[string]struct, map[string]*struct, reflect.Value, etc.
 //
 // The optional parameter `mapping` is used for struct attribute to map key mapping, which makes
 // sense only if the items of original map `params` is type struct.
 func doMapToMap(params interface{}, pointer interface{}, mapping ...map[string]string) (err error) {
-	// If given `params` is JSON, it then uses json.Unmarshal doing the converting.
-	switch r := params.(type) {
-	case []byte:
-		if json.Valid(r) {
-			if rv, ok := pointer.(reflect.Value); ok {
-				if rv.Kind() == reflect.Ptr {
-					return json.UnmarshalUseNumber(r, rv.Interface())
-				}
-			} else {
-				return json.UnmarshalUseNumber(r, pointer)
-			}
-		}
-	case string:
-		if paramsBytes := []byte(r); json.Valid(paramsBytes) {
-			if rv, ok := pointer.(reflect.Value); ok {
-				if rv.Kind() == reflect.Ptr {
-					return json.UnmarshalUseNumber(paramsBytes, rv.Interface())
-				}
-			} else {
-				return json.UnmarshalUseNumber(paramsBytes, pointer)
-			}
-		}
-	}
 	var (
 		paramsRv                  reflect.Value
 		paramsKind                reflect.Kind
@@ -92,15 +68,19 @@ func doMapToMap(params interface{}, pointer interface{}, mapping ...map[string]s
 		pointerKind = pointerRv.Kind()
 	}
 	if pointerKind != reflect.Map {
-		return gerror.NewCodef(gcode.CodeInvalidParameter, "pointer should be type of *map, but got:%s", pointerKind)
+		return gerror.NewCodef(
+			gcode.CodeInvalidParameter,
+			`destination pointer should be type of *map, but got: %s`,
+			pointerKind,
+		)
 	}
 	defer func() {
-		// Catch the panic, especially the reflect operation panics.
+		// Catch the panic, especially the reflection operation panics.
 		if exception := recover(); exception != nil {
 			if v, ok := exception.(error); ok && gerror.HasStack(v) {
 				err = v
 			} else {
-				err = gerror.NewCodeSkipf(gcode.CodeInternalError, 1, "%+v", exception)
+				err = gerror.NewCodeSkipf(gcode.CodeInternalPanic, 1, "%+v", exception)
 			}
 		}
 	}()
@@ -116,31 +96,35 @@ func doMapToMap(params interface{}, pointer interface{}, mapping ...map[string]s
 		pointerValueKind = pointerValueType.Elem().Kind()
 	}
 	for _, key := range paramsKeys {
-		e := reflect.New(pointerValueType).Elem()
+		mapValue := reflect.New(pointerValueType).Elem()
 		switch pointerValueKind {
 		case reflect.Map, reflect.Struct:
-			if err = doStruct(paramsRv.MapIndex(key).Interface(), e, keyToAttributeNameMapping, ""); err != nil {
+			if err = doStruct(
+				paramsRv.MapIndex(key).Interface(), mapValue, keyToAttributeNameMapping, "",
+			); err != nil {
 				return err
 			}
 		default:
-			e.Set(
+			mapValue.Set(
 				reflect.ValueOf(
-					Convert(
-						paramsRv.MapIndex(key).Interface(),
-						pointerValueType.String(),
-					),
+					doConvert(doConvertInput{
+						FromValue:  paramsRv.MapIndex(key).Interface(),
+						ToTypeName: pointerValueType.String(),
+						ReferValue: mapValue,
+						Extra:      nil,
+					}),
 				),
 			)
 		}
-		dataMap.SetMapIndex(
-			reflect.ValueOf(
-				Convert(
-					key.Interface(),
-					pointerKeyType.Name(),
-				),
-			),
-			e,
+		var mapKey = reflect.ValueOf(
+			doConvert(doConvertInput{
+				FromValue:  key.Interface(),
+				ToTypeName: pointerKeyType.Name(),
+				ReferValue: reflect.New(pointerKeyType).Elem().Interface(),
+				Extra:      nil,
+			}),
 		)
+		dataMap.SetMapIndex(mapKey, mapValue)
 	}
 	pointerRv.Set(dataMap)
 	return nil

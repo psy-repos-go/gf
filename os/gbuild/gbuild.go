@@ -18,6 +18,24 @@ import (
 	"github.com/gogf/gf/v2/internal/json"
 )
 
+// BuildInfo maintains the built info of the current binary.
+type BuildInfo struct {
+	GoFrame string                 // Built used GoFrame version.
+	Golang  string                 // Built the used Golang version.
+	Git     string                 // Built used git repo. commit id and datetime.
+	Time    string                 // Built datetime.
+	Version string                 // Built version.
+	Data    map[string]interface{} // All custom built data key-value pairs.
+}
+
+const (
+	gfVersion    = `gfVersion`
+	goVersion    = `goVersion`
+	BuiltGit     = `builtGit`
+	BuiltTime    = `builtTime`
+	BuiltVersion = `builtVersion`
+)
+
 var (
 	builtInVarStr = ""                       // Raw variable base64 string, which is injected by go build flags.
 	builtInVarMap = map[string]interface{}{} // Binary custom variable map decoded.
@@ -28,10 +46,10 @@ func init() {
 	if builtInVarStr != "" {
 		err := json.UnmarshalUseNumber(gbase64.MustDecodeString(builtInVarStr), &builtInVarMap)
 		if err != nil {
-			intlog.Error(context.TODO(), err)
+			intlog.Errorf(context.TODO(), `%+v`, err)
 		}
-		builtInVarMap["gfVersion"] = gf.VERSION
-		builtInVarMap["goVersion"] = runtime.Version()
+		builtInVarMap[gfVersion] = gf.VERSION
+		builtInVarMap[goVersion] = runtime.Version()
 		intlog.Printf(context.TODO(), "build variables: %+v", builtInVarMap)
 	} else {
 		intlog.Print(context.TODO(), "no build variables")
@@ -41,12 +59,14 @@ func init() {
 // Info returns the basic built information of the binary as map.
 // Note that it should be used with gf-cli tool "gf build",
 // which automatically injects necessary information into the binary.
-func Info() map[string]string {
-	return map[string]string{
-		"gf":   Get("gfVersion").String(),
-		"go":   Get("goVersion").String(),
-		"git":  Get("builtGit").String(),
-		"time": Get("builtTime").String(),
+func Info() BuildInfo {
+	return BuildInfo{
+		GoFrame: Get(gfVersion).String(),
+		Golang:  Get(goVersion).String(),
+		Git:     Get(BuiltGit).String(),
+		Time:    Get(BuiltTime).String(),
+		Version: Get(BuiltVersion).String(),
+		Data:    Data(),
 	}
 }
 
@@ -61,7 +81,7 @@ func Get(name string, def ...interface{}) *gvar.Var {
 	return nil
 }
 
-// Map returns the custom build-in variable map.
-func Map() map[string]interface{} {
+// Data returns the custom build-in variables as the map.
+func Data() map[string]interface{} {
 	return builtInVarMap
 }

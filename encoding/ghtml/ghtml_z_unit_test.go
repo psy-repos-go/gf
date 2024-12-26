@@ -47,7 +47,7 @@ func Test_SpecialCharsMapOrStruct_Map(t *testing.T) {
 			"Content": "<div>C</div>",
 		}
 		err := ghtml.SpecialCharsMapOrStruct(a)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(a["Title"], `&lt;h1&gt;T&lt;/h1&gt;`)
 		t.Assert(a["Content"], `&lt;div&gt;C&lt;/div&gt;`)
 	})
@@ -57,7 +57,7 @@ func Test_SpecialCharsMapOrStruct_Map(t *testing.T) {
 			"Content": "<div>C</div>",
 		}
 		err := ghtml.SpecialCharsMapOrStruct(a)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(a["Title"], `&lt;h1&gt;T&lt;/h1&gt;`)
 		t.Assert(a["Content"], `&lt;div&gt;C&lt;/div&gt;`)
 	})
@@ -74,8 +74,18 @@ func Test_SpecialCharsMapOrStruct_Struct(t *testing.T) {
 			Content: "<div>C</div>",
 		}
 		err := ghtml.SpecialCharsMapOrStruct(a)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(a.Title, `&lt;h1&gt;T&lt;/h1&gt;`)
 		t.Assert(a.Content, `&lt;div&gt;C&lt;/div&gt;`)
+	})
+
+	// should error
+	gtest.C(t, func(t *gtest.T) {
+		a := A{
+			Title:   "<h1>T</h1>",
+			Content: "<div>C</div>",
+		}
+		err := ghtml.SpecialCharsMapOrStruct(a)
+		t.AssertNE(err, nil)
 	})
 }

@@ -110,6 +110,22 @@ func Test_AnyAnyMap_Batch(t *testing.T) {
 	})
 }
 
+func Test_AnyAnyMap_Iterator_Deadlock(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		m := gmap.NewAnyAnyMapFrom(map[interface{}]interface{}{1: 1, 2: "2", "3": "3", "4": 4}, true)
+		m.Iterator(func(k interface{}, _ interface{}) bool {
+			if gconv.Int(k)%2 == 0 {
+				m.Remove(k)
+			}
+			return true
+		})
+		t.Assert(m.Map(), map[interface{}]interface{}{
+			1:   1,
+			"3": "3",
+		})
+	})
+}
+
 func Test_AnyAnyMap_Iterator(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
 		expect := map[interface{}]interface{}{1: 1, 2: "2"}
@@ -171,6 +187,9 @@ func Test_AnyAnyMap_Merge(t *testing.T) {
 		m2.Set(2, "2")
 		m1.Merge(m2)
 		t.Assert(m1.Map(), map[interface{}]interface{}{1: 1, 2: "2"})
+		m3 := gmap.NewAnyAnyMapFrom(nil)
+		m3.Merge(m2)
+		t.Assert(m3.Map(), m2.Map())
 	})
 }
 
@@ -253,11 +272,11 @@ func Test_AnyAnyMap_Json(t *testing.T) {
 			"k2": "v2",
 		}
 		b, err := json.Marshal(gconv.Map(data))
-		t.Assert(err, nil)
+		t.AssertNil(err)
 
 		m := gmap.New()
 		err = json.UnmarshalUseNumber(b, m)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(m.Get("k1"), data["k1"])
 		t.Assert(m.Get("k2"), data["k2"])
 	})
@@ -267,11 +286,11 @@ func Test_AnyAnyMap_Json(t *testing.T) {
 			"k2": "v2",
 		}
 		b, err := json.Marshal(gconv.Map(data))
-		t.Assert(err, nil)
+		t.AssertNil(err)
 
 		var m gmap.Map
 		err = json.UnmarshalUseNumber(b, &m)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(m.Get("k1"), data["k1"])
 		t.Assert(m.Get("k2"), data["k2"])
 	})
@@ -296,6 +315,10 @@ func Test_AnyAnyMap_Pop(t *testing.T) {
 
 		t.AssertNE(k1, k2)
 		t.AssertNE(v1, v2)
+
+		k3, v3 := m.Pop()
+		t.AssertNil(k3)
+		t.AssertNil(v3)
 	})
 }
 
@@ -327,6 +350,11 @@ func Test_AnyAnyMap_Pops(t *testing.T) {
 
 		t.Assert(kArray.Unique().Len(), 3)
 		t.Assert(vArray.Unique().Len(), 3)
+
+		v := m.Pops(1)
+		t.AssertNil(v)
+		v = m.Pops(-1)
+		t.AssertNil(v)
 	})
 }
 
@@ -342,7 +370,7 @@ func TestAnyAnyMap_UnmarshalValue(t *testing.T) {
 			"name": "john",
 			"map":  []byte(`{"k1":"v1","k2":"v2"}`),
 		}, &v)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(v.Name, "john")
 		t.Assert(v.Map.Size(), 2)
 		t.Assert(v.Map.Get("k1"), "v1")
@@ -358,10 +386,60 @@ func TestAnyAnyMap_UnmarshalValue(t *testing.T) {
 				"k2": "v2",
 			},
 		}, &v)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(v.Name, "john")
 		t.Assert(v.Map.Size(), 2)
 		t.Assert(v.Map.Get("k1"), "v1")
 		t.Assert(v.Map.Get("k2"), "v2")
+	})
+}
+
+func Test_AnyAnyMap_DeepCopy(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		m := gmap.NewAnyAnyMapFrom(g.MapAnyAny{
+			"k1": "v1",
+			"k2": "v2",
+		})
+		t.Assert(m.Size(), 2)
+
+		n := m.DeepCopy().(*gmap.AnyAnyMap)
+		n.Set("k1", "val1")
+		t.AssertNE(m.Get("k1"), n.Get("k1"))
+	})
+}
+
+func Test_AnyAnyMap_IsSubOf(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		m1 := gmap.NewAnyAnyMapFrom(g.MapAnyAny{
+			"k1": "v1",
+			"k2": "v2",
+		})
+		m2 := gmap.NewAnyAnyMapFrom(g.MapAnyAny{
+			"k2": "v2",
+		})
+		t.Assert(m1.IsSubOf(m2), false)
+		t.Assert(m2.IsSubOf(m1), true)
+		t.Assert(m2.IsSubOf(m2), true)
+	})
+}
+
+func Test_AnyAnyMap_Diff(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		m1 := gmap.NewAnyAnyMapFrom(g.MapAnyAny{
+			"0": "v0",
+			"1": "v1",
+			2:   "v2",
+			3:   3,
+		})
+		m2 := gmap.NewAnyAnyMapFrom(g.MapAnyAny{
+			"0": "v0",
+			2:   "v2",
+			3:   "v3",
+			4:   "v4",
+		})
+		addedKeys, removedKeys, updatedKeys := m1.Diff(m2)
+		t.Assert(addedKeys, []interface{}{4})
+		t.Assert(removedKeys, []interface{}{"1"})
+		t.Assert(updatedKeys, []interface{}{3})
 	})
 }

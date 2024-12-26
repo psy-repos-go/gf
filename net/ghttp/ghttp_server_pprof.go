@@ -23,12 +23,13 @@ const (
 	defaultPProfPattern    = "/debug/pprof"
 )
 
-// StartPProfServer starts and runs a new server for pprof.
-func StartPProfServer(port int, pattern ...string) {
-	s := GetServer(defaultPProfServerName)
-	s.EnablePProf()
-	s.SetPort(port)
-	s.Run()
+// StartPProfServer starts and runs a new server for pprof in another goroutine.
+func StartPProfServer(address string, pattern ...string) (s *Server, err error) {
+	s = GetServer(defaultPProfServerName)
+	s.EnablePProf(pattern...)
+	s.SetAddr(address)
+	err = s.Start()
+	return
 }
 
 // EnablePProf enables PProf feature for server.
@@ -92,7 +93,7 @@ func (p *utilPProf) Index(r *Request) {
 	for _, p := range profiles {
 		if p.Name() == action {
 			if err := p.WriteTo(r.Response.Writer, r.GetRequest("debug").Int()); err != nil {
-				intlog.Error(ctx, err)
+				intlog.Errorf(ctx, `%+v`, err)
 			}
 			break
 		}

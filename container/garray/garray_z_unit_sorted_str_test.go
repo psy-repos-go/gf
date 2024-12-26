@@ -14,10 +14,24 @@ import (
 
 	"github.com/gogf/gf/v2/container/garray"
 	"github.com/gogf/gf/v2/frame/g"
+	"github.com/gogf/gf/v2/internal/empty"
 	"github.com/gogf/gf/v2/internal/json"
 	"github.com/gogf/gf/v2/test/gtest"
+	"github.com/gogf/gf/v2/text/gstr"
 	"github.com/gogf/gf/v2/util/gconv"
 )
+
+func TestNewSortedStrArrayComparator(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		a1 := []string{"a", "d", "c", "b"}
+		s1 := garray.NewSortedStrArrayComparator(func(a, b string) int {
+			return gstr.Compare(a, b)
+		})
+		s1.Add(a1...)
+		t.Assert(s1.Len(), 4)
+		t.Assert(s1, []string{"a", "b", "c", "d"})
+	})
+}
 
 func TestNewSortedStrArrayFrom(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
@@ -58,6 +72,9 @@ func TestSortedStrArray_ContainsI(t *testing.T) {
 		t.Assert(s.Contains("A"), false)
 		t.Assert(s.Contains("a"), true)
 		t.Assert(s.ContainsI("A"), true)
+
+		s = garray.NewSortedStrArray()
+		t.Assert(s.Contains("A"), false)
 	})
 }
 
@@ -85,6 +102,10 @@ func TestSortedStrArray_Get(t *testing.T) {
 		v, ok = array1.Get(0)
 		t.Assert(v, "a")
 		t.Assert(ok, true)
+
+		v, ok = array1.Get(99)
+		t.Assert(v, "")
+		t.Assert(ok, false)
 	})
 }
 
@@ -361,6 +382,11 @@ func TestSortedStrArray_Rand(t *testing.T) {
 		v, ok := array1.Rand()
 		t.AssertIN(v, []string{"e", "a", "d"})
 		t.Assert(ok, true)
+
+		array2 := garray.NewSortedStrArrayFrom([]string{})
+		v, ok = array2.Rand()
+		t.Assert(v, "")
+		t.Assert(ok, false)
 	})
 }
 
@@ -375,6 +401,10 @@ func TestSortedStrArray_Rands(t *testing.T) {
 
 		s1 = array1.Rands(4)
 		t.Assert(len(s1), 4)
+
+		array2 := garray.NewSortedStrArrayFrom([]string{})
+		val := array2.Rands(1)
+		t.Assert(val, nil)
 	})
 }
 
@@ -391,6 +421,11 @@ func TestSortedStrArray_Join(t *testing.T) {
 		array1 := garray.NewSortedStrArrayFrom(a1)
 		t.Assert(array1.Join("."), `"b".\c.a`)
 	})
+
+	gtest.C(t, func(t *gtest.T) {
+		array1 := garray.NewSortedStrArrayFrom([]string{})
+		t.Assert(array1.Join("."), "")
+	})
 }
 
 func TestSortedStrArray_String(t *testing.T) {
@@ -398,6 +433,9 @@ func TestSortedStrArray_String(t *testing.T) {
 		a1 := []string{"e", "a", "d"}
 		array1 := garray.NewSortedStrArrayFrom(a1)
 		t.Assert(array1.String(), `["a","d","e"]`)
+
+		array1 = nil
+		t.Assert(array1.String(), "")
 	})
 }
 
@@ -469,6 +507,11 @@ func TestSortedStrArray_Unique(t *testing.T) {
 		array1.Unique()
 		t.Assert(array1.Len(), 3)
 		t.Assert(array1, []string{"1", "2", "3"})
+
+		array2 := garray.NewSortedStrArrayFrom([]string{})
+		array2.Unique()
+		t.Assert(array2.Len(), 0)
+		t.Assert(array2, []string{})
 	})
 }
 
@@ -578,12 +621,13 @@ func TestSortedStrArray_Json(t *testing.T) {
 
 		a2 := garray.NewSortedStrArray()
 		err1 = json.UnmarshalUseNumber(b2, &a2)
+		t.AssertNil(err1)
 		t.Assert(a2.Slice(), s2)
 		t.Assert(a2.Interfaces(), s2)
 
 		var a3 garray.SortedStrArray
 		err := json.UnmarshalUseNumber(b2, &a3)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(a3.Slice(), s1)
 		t.Assert(a3.Interfaces(), s1)
 	})
@@ -599,12 +643,13 @@ func TestSortedStrArray_Json(t *testing.T) {
 
 		a2 := garray.NewSortedStrArray()
 		err1 = json.UnmarshalUseNumber(b2, &a2)
+		t.AssertNil(err1)
 		t.Assert(a2.Slice(), s2)
 		t.Assert(a2.Interfaces(), s2)
 
 		var a3 garray.SortedStrArray
 		err := json.UnmarshalUseNumber(b2, &a3)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(a3.Slice(), s1)
 		t.Assert(a3.Interfaces(), s1)
 	})
@@ -619,11 +664,11 @@ func TestSortedStrArray_Json(t *testing.T) {
 			"Scores": []string{"A+", "A", "A"},
 		}
 		b, err := json.Marshal(data)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 
 		user := new(User)
 		err = json.UnmarshalUseNumber(b, user)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(user.Name, data["Name"])
 		t.Assert(user.Scores, []string{"A", "A", "A+"})
 	})
@@ -638,11 +683,11 @@ func TestSortedStrArray_Json(t *testing.T) {
 			"Scores": []string{"A+", "A", "A"},
 		}
 		b, err := json.Marshal(data)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 
 		user := new(User)
 		err = json.UnmarshalUseNumber(b, user)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(user.Name, data["Name"])
 		t.Assert(user.Scores, []string{"A", "A", "A+"})
 	})
@@ -707,6 +752,15 @@ func TestSortedStrArray_RemoveValue(t *testing.T) {
 	})
 }
 
+func TestSortedStrArray_RemoveValues(t *testing.T) {
+	slice := g.SliceStr{"a", "b", "d", "c"}
+	array := garray.NewSortedStrArrayFrom(slice)
+	gtest.C(t, func(t *gtest.T) {
+		array.RemoveValues("a", "b", "c")
+		t.Assert(array.Slice(), g.SliceStr{"d"})
+	})
+}
+
 func TestSortedStrArray_UnmarshalValue(t *testing.T) {
 	type V struct {
 		Name  string
@@ -719,7 +773,7 @@ func TestSortedStrArray_UnmarshalValue(t *testing.T) {
 			"name":  "john",
 			"array": []byte(`["1","3","2"]`),
 		}, &v)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(v.Name, "john")
 		t.Assert(v.Array.Slice(), g.SliceStr{"1", "2", "3"})
 	})
@@ -730,9 +784,23 @@ func TestSortedStrArray_UnmarshalValue(t *testing.T) {
 			"name":  "john",
 			"array": g.SliceStr{"1", "3", "2"},
 		}, &v)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(v.Name, "john")
 		t.Assert(v.Array.Slice(), g.SliceStr{"1", "2", "3"})
+	})
+}
+func TestSortedStrArray_Filter(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		array := garray.NewSortedStrArrayFrom(g.SliceStr{"", "1", "2", "0"})
+		t.Assert(array.Filter(func(index int, value string) bool {
+			return empty.IsEmpty(value)
+		}), g.SliceStr{"0", "1", "2"})
+	})
+	gtest.C(t, func(t *gtest.T) {
+		array := garray.NewSortedStrArrayFrom(g.SliceStr{"1", "2"})
+		t.Assert(array.Filter(func(index int, value string) bool {
+			return empty.IsEmpty(value)
+		}), g.SliceStr{"1", "2"})
 	})
 }
 
@@ -753,5 +821,17 @@ func TestSortedStrArray_Walk(t *testing.T) {
 		t.Assert(array.Walk(func(value string) string {
 			return "key-" + value
 		}), g.Slice{"key-1", "key-2"})
+	})
+}
+
+func TestSortedStrArray_DeepCopy(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		array := garray.NewSortedStrArrayFrom([]string{"a", "b", "c", "d"})
+		copyArray := array.DeepCopy().(*garray.SortedStrArray)
+		array.Add("e")
+		copyArray.Add("f")
+		cval, _ := copyArray.Get(4)
+		val, _ := array.Get(4)
+		t.AssertNE(cval, val)
 	})
 }

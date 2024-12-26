@@ -55,3 +55,52 @@ func ExampleWrapCodef() {
 	// It's Custom Error: permission denied
 	// 10000
 }
+
+func ExampleEqual() {
+	err1 := errors.New("permission denied")
+	err2 := gerror.New("permission denied")
+	err3 := gerror.NewCode(gcode.CodeNotAuthorized, "permission denied")
+	fmt.Println(gerror.Equal(err1, err2))
+	fmt.Println(gerror.Equal(err2, err3))
+
+	// Output:
+	// true
+	// false
+}
+
+func ExampleIs() {
+	err1 := errors.New("permission denied")
+	err2 := gerror.Wrap(err1, "operation failed")
+	fmt.Println(gerror.Is(err1, err1))
+	fmt.Println(gerror.Is(err2, err2))
+	fmt.Println(gerror.Is(err2, err1))
+	fmt.Println(gerror.Is(err1, err2))
+
+	// Output:
+	// true
+	// true
+	// true
+	// false
+}
+
+func ExampleCode() {
+	err1 := gerror.NewCode(gcode.CodeInternalError, "permission denied")
+	err2 := gerror.Wrap(err1, "operation failed")
+	fmt.Println(gerror.Code(err1))
+	fmt.Println(gerror.Code(err2))
+
+	// Output:
+	// 50:Internal Error
+	// 50:Internal Error
+}
+
+func ExampleHasCode() {
+	err1 := gerror.NewCode(gcode.CodeInternalError, "permission denied")
+	err2 := gerror.Wrap(err1, "operation failed")
+	fmt.Println(gerror.HasCode(err1, gcode.CodeOK))
+	fmt.Println(gerror.HasCode(err2, gcode.CodeInternalError))
+
+	// Output:
+	// false
+	// true
+}

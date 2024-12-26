@@ -9,32 +9,41 @@ package gstr
 import (
 	"bytes"
 	"fmt"
-	"github.com/gogf/gf/v2/util/grand"
 	"math"
 	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/gogf/gf/v2/util/grand"
 )
-
-// Chr return the ascii string of a number(0-255).
-func Chr(ascii int) string {
-	return string([]byte{byte(ascii % 256)})
-}
-
-// Ord converts the first byte of a string to a value between 0 and 255.
-func Ord(char string) int {
-	return int(char[0])
-}
 
 var (
 	// octReg is the regular expression object for checks octal string.
 	octReg = regexp.MustCompile(`\\[0-7]{3}`)
 )
 
+// Chr return the ascii string of a number(0-255).
+//
+// Example:
+// Chr(65) -> "A"
+func Chr(ascii int) string {
+	return string([]byte{byte(ascii % 256)})
+}
+
+// Ord converts the first byte of a string to a value between 0 and 255.
+//
+// Example:
+// Chr("A") -> 65
+func Ord(char string) int {
+	return int(char[0])
+}
+
 // OctStr converts string container octal string to its original string,
 // for example, to Chinese string.
-// Eg: `\346\200\241` -> 怡
+//
+// Example:
+// OctStr("\346\200\241") -> 怡
 func OctStr(str string) string {
 	return octReg.ReplaceAllStringFunc(
 		str,
@@ -46,6 +55,9 @@ func OctStr(str string) string {
 }
 
 // Reverse returns a string which is the reverse of `str`.
+//
+// Example:
+// Reverse("123456") -> "654321"
 func Reverse(str string) string {
 	runes := []rune(str)
 	for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
@@ -55,10 +67,14 @@ func Reverse(str string) string {
 }
 
 // NumberFormat formats a number with grouped thousands.
-// `decimals`: Sets the number of decimal points.
-// `decPoint`: Sets the separator for the decimal point.
-// `thousandsSep`: Sets the thousands' separator.
+// Parameter `decimals`: Sets the number of decimal points.
+// Parameter `decPoint`: Sets the separator for the decimal point.
+// Parameter `thousandsSep`: Sets the thousands' separator.
 // See http://php.net/manual/en/function.number-format.php.
+//
+// Example:
+// NumberFormat(1234.56, 2, ".", "")  -> 1234,56
+// NumberFormat(1234.56, 2, ",", " ") -> 1 234,56
 func NumberFormat(number float64, decimals int, decPoint, thousandsSep string) string {
 	neg := false
 	if number < 0 {
@@ -102,6 +118,11 @@ func NumberFormat(number float64, decimals int, decPoint, thousandsSep string) s
 
 // Shuffle randomly shuffles a string.
 // It considers parameter `str` as unicode string.
+//
+// Example:
+// Shuffle("123456") -> "325164"
+// Shuffle("123456") -> "231546"
+// ...
 func Shuffle(str string) string {
 	runes := []rune(str)
 	s := make([]rune, len(runes))
@@ -161,7 +182,7 @@ func Nl2Br(str string, isXhtml ...bool) string {
 		}
 		switch v {
 		case n, r:
-			if (i+1 < length) && (v == r && runes[i+1] == n) || (v == n && runes[i+1] == r) {
+			if (i+1 < length) && ((v == r && runes[i+1] == n) || (v == n && runes[i+1] == r)) {
 				buf.Write(br)
 				skip = true
 				continue
@@ -175,7 +196,8 @@ func Nl2Br(str string, isXhtml ...bool) string {
 }
 
 // WordWrap wraps a string to a given number of characters.
-// TODO: Enable cut parameter, see http://php.net/manual/en/function.wordwrap.php.
+// This function supports cut parameters of both english and chinese punctuations.
+// TODO: Enable custom cut parameter, see http://php.net/manual/en/function.wordwrap.php.
 func WordWrap(str string, width int, br string) string {
 	if br == "" {
 		br = "\n"
@@ -185,36 +207,50 @@ func WordWrap(str string, width int, br string) string {
 		wordBuf, spaceBuf bytes.Buffer
 		init              = make([]byte, 0, len(str))
 		buf               = bytes.NewBuffer(init)
+		strRunes          = []rune(str)
 	)
-	for _, char := range []rune(str) {
-		if char == '\n' {
+	for _, char := range strRunes {
+		switch {
+		case char == '\n':
 			if wordBuf.Len() == 0 {
 				if current+spaceBuf.Len() > width {
 					current = 0
 				} else {
 					current += spaceBuf.Len()
-					spaceBuf.WriteTo(buf)
+					_, _ = spaceBuf.WriteTo(buf)
 				}
 				spaceBuf.Reset()
 			} else {
 				current += spaceBuf.Len() + wordBuf.Len()
-				spaceBuf.WriteTo(buf)
+				_, _ = spaceBuf.WriteTo(buf)
 				spaceBuf.Reset()
-				wordBuf.WriteTo(buf)
+				_, _ = wordBuf.WriteTo(buf)
 				wordBuf.Reset()
 			}
 			buf.WriteRune(char)
 			current = 0
-		} else if unicode.IsSpace(char) {
+
+		case unicode.IsSpace(char):
 			if spaceBuf.Len() == 0 || wordBuf.Len() > 0 {
 				current += spaceBuf.Len() + wordBuf.Len()
-				spaceBuf.WriteTo(buf)
+				_, _ = spaceBuf.WriteTo(buf)
 				spaceBuf.Reset()
-				wordBuf.WriteTo(buf)
+				_, _ = wordBuf.WriteTo(buf)
 				wordBuf.Reset()
 			}
 			spaceBuf.WriteRune(char)
-		} else {
+
+		case isPunctuation(char):
+			wordBuf.WriteRune(char)
+			if spaceBuf.Len() == 0 || wordBuf.Len() > 0 {
+				current += spaceBuf.Len() + wordBuf.Len()
+				_, _ = spaceBuf.WriteTo(buf)
+				spaceBuf.Reset()
+				_, _ = wordBuf.WriteTo(buf)
+				wordBuf.Reset()
+			}
+
+		default:
 			wordBuf.WriteRune(char)
 			if current+spaceBuf.Len()+wordBuf.Len() > width && wordBuf.Len() < width {
 				buf.WriteString(br)
@@ -226,11 +262,24 @@ func WordWrap(str string, width int, br string) string {
 
 	if wordBuf.Len() == 0 {
 		if current+spaceBuf.Len() <= width {
-			spaceBuf.WriteTo(buf)
+			_, _ = spaceBuf.WriteTo(buf)
 		}
 	} else {
-		spaceBuf.WriteTo(buf)
-		wordBuf.WriteTo(buf)
+		_, _ = spaceBuf.WriteTo(buf)
+		_, _ = wordBuf.WriteTo(buf)
 	}
 	return buf.String()
+}
+
+func isPunctuation(char int32) bool {
+	switch char {
+	// English Punctuations.
+	case ';', '.', ',', ':', '~':
+		return true
+	// Chinese Punctuations.
+	case '；', '，', '。', '：', '？', '！', '…', '、':
+		return true
+	default:
+		return false
+	}
 }

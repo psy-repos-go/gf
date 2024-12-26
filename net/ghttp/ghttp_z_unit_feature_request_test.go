@@ -9,26 +9,25 @@ package ghttp_test
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"testing"
 	"time"
 
 	"github.com/gogf/gf/v2/encoding/gjson"
 	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/net/ghttp"
-	"github.com/gogf/gf/v2/net/gtcp"
 	"github.com/gogf/gf/v2/test/gtest"
+	"github.com/gogf/gf/v2/util/guid"
 )
 
 func Test_Params_Basic(t *testing.T) {
 	type User struct {
 		Id    int
 		Name  string
-		Pass1 string `params:"password1"`
-		Pass2 string `params:"password2"`
+		Pass1 string `p:"password1"`
+		Pass2 string `p:"password2"`
 	}
-	p, _ := gtcp.GetFreePort()
-	s := g.Server(p)
+	s := g.Server(guid.S())
 	// GET
 	s.BindHandler("/get", func(r *ghttp.Request) {
 		if r.GetQuery("array") != nil {
@@ -237,8 +236,8 @@ func Test_Params_Basic(t *testing.T) {
 	})
 	s.BindHandler("/struct-with-base", func(r *ghttp.Request) {
 		type Base struct {
-			Pass1 string `params:"password1"`
-			Pass2 string `params:"password2"`
+			Pass1 string `p:"password1"`
+			Pass2 string `p:"password2"`
 		}
 		type UserWithBase1 struct {
 			Id   int
@@ -259,7 +258,6 @@ func Test_Params_Basic(t *testing.T) {
 			r.Response.Write(user2.Id, user2.Name, user2.Pass.Pass1, user2.Pass.Pass2)
 		}
 	})
-	s.SetPort(p)
 	s.SetDumpRouterMap(false)
 	s.Start()
 	defer s.Shutdown()
@@ -267,7 +265,7 @@ func Test_Params_Basic(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	gtest.C(t, func(t *gtest.T) {
 		client := g.Client()
-		client.SetPrefix(fmt.Sprintf("http://127.0.0.1:%d", p))
+		client.SetPrefix(fmt.Sprintf("http://127.0.0.1:%d", s.GetListenedPort()))
 		// GET
 		t.Assert(client.GetContent(ctx, "/get", "array[]=1&array[]=2"), `["1","2"]`)
 		t.Assert(client.GetContent(ctx, "/get", "slice=1&slice=2"), `2`)
@@ -362,19 +360,17 @@ func Test_Params_Basic(t *testing.T) {
 }
 
 func Test_Params_Header(t *testing.T) {
-	p, _ := gtcp.GetFreePort()
-	s := g.Server(p)
+	s := g.Server(guid.S())
 	s.BindHandler("/header", func(r *ghttp.Request) {
 		r.Response.Write(r.GetHeader("test"))
 	})
-	s.SetPort(p)
 	s.SetDumpRouterMap(false)
 	s.Start()
 	defer s.Shutdown()
 
 	time.Sleep(100 * time.Millisecond)
 	gtest.C(t, func(t *gtest.T) {
-		prefix := fmt.Sprintf("http://127.0.0.1:%d", p)
+		prefix := fmt.Sprintf("http://127.0.0.1:%d", s.GetListenedPort())
 		client := g.Client()
 		client.SetPrefix(prefix)
 
@@ -383,15 +379,13 @@ func Test_Params_Header(t *testing.T) {
 }
 
 func Test_Params_SupportChars(t *testing.T) {
-	p, _ := gtcp.GetFreePort()
-	s := g.Server(p)
+	s := g.Server(guid.S())
 	s.BindHandler("/form-value", func(r *ghttp.Request) {
 		r.Response.Write(r.GetForm("test-value"))
 	})
 	s.BindHandler("/form-array", func(r *ghttp.Request) {
 		r.Response.Write(r.GetForm("test-array"))
 	})
-	s.SetPort(p)
 	s.SetDumpRouterMap(false)
 	s.Start()
 	defer s.Shutdown()
@@ -399,15 +393,14 @@ func Test_Params_SupportChars(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	gtest.C(t, func(t *gtest.T) {
 		c := g.Client()
-		c.SetPrefix(fmt.Sprintf("http://127.0.0.1:%d", p))
+		c.SetPrefix(fmt.Sprintf("http://127.0.0.1:%d", s.GetListenedPort()))
 		t.Assert(c.PostContent(ctx, "/form-value", "test-value=100"), "100")
 		t.Assert(c.PostContent(ctx, "/form-array", "test-array[]=1&test-array[]=2"), `["1","2"]`)
 	})
 }
 
 func Test_Params_Priority(t *testing.T) {
-	p, _ := gtcp.GetFreePort()
-	s := g.Server(p)
+	s := g.Server(guid.S())
 	s.BindHandler("/query", func(r *ghttp.Request) {
 		r.Response.Write(r.GetQuery("a"))
 	})
@@ -423,14 +416,13 @@ func Test_Params_Priority(t *testing.T) {
 			"b": 2,
 		}))
 	})
-	s.SetPort(p)
 	s.SetDumpRouterMap(false)
 	s.Start()
 	defer s.Shutdown()
 
 	time.Sleep(100 * time.Millisecond)
 	gtest.C(t, func(t *gtest.T) {
-		prefix := fmt.Sprintf("http://127.0.0.1:%d", p)
+		prefix := fmt.Sprintf("http://127.0.0.1:%d", s.GetListenedPort())
 		client := g.Client()
 		client.SetPrefix(prefix)
 
@@ -443,19 +435,30 @@ func Test_Params_Priority(t *testing.T) {
 }
 
 func Test_Params_GetRequestMap(t *testing.T) {
-	p, _ := gtcp.GetFreePort()
-	s := g.Server(p)
+	s := g.Server(guid.S())
 	s.BindHandler("/map", func(r *ghttp.Request) {
 		r.Response.Write(r.GetRequestMap())
 	})
-	s.SetPort(p)
+	s.BindHandler("/withKVMap", func(r *ghttp.Request) {
+		m := r.GetRequestMap(map[string]interface{}{"id": 2})
+		r.Response.Write(m["id"])
+	})
+	s.BindHandler("/paramsMapWithKVMap", func(r *ghttp.Request) {
+		r.SetParam("name", "john")
+		m := r.GetRequestMap(map[string]interface{}{"id": 2})
+		r.Response.Write(m["id"])
+	})
+	s.BindHandler("/{name}.map", func(r *ghttp.Request) {
+		m := r.GetRequestMap(map[string]interface{}{"id": 2})
+		r.Response.Write(m["id"])
+	})
 	s.SetDumpRouterMap(false)
 	s.Start()
 	defer s.Shutdown()
 
 	time.Sleep(100 * time.Millisecond)
 	gtest.C(t, func(t *gtest.T) {
-		prefix := fmt.Sprintf("http://127.0.0.1:%d", p)
+		prefix := fmt.Sprintf("http://127.0.0.1:%d", s.GetListenedPort())
 		client := g.Client()
 		client.SetPrefix(prefix)
 
@@ -466,12 +469,20 @@ func Test_Params_GetRequestMap(t *testing.T) {
 			),
 			`{"attach":"","returnmsg":"Success"}`,
 		)
+
+		t.Assert(client.PostContent(ctx, "/john.map", "name=john"), 2)
+
+		t.Assert(client.PostContent(ctx, "/withKVMap", "name=john"), 2)
+
+		t.Assert(client.PostContent(ctx, "/paramsMapWithKVMap"), 2)
+
+		client.SetContentType("application/json")
+		t.Assert(client.GetContent(ctx, "/withKVMap", "name=john"), 2)
 	})
 }
 
 func Test_Params_Modify(t *testing.T) {
-	p, _ := gtcp.GetFreePort()
-	s := g.Server(p)
+	s := g.Server(guid.S())
 	s.BindHandler("/param/modify", func(r *ghttp.Request) {
 		param := r.GetMap()
 		param["id"] = 2
@@ -480,18 +491,17 @@ func Test_Params_Modify(t *testing.T) {
 			r.Response.Write(err)
 			return
 		}
-		r.Request.Body = ioutil.NopCloser(bytes.NewReader(paramBytes))
+		r.Request.Body = io.NopCloser(bytes.NewReader(paramBytes))
 		r.ReloadParam()
 		r.Response.Write(r.GetMap())
 	})
-	s.SetPort(p)
 	s.SetDumpRouterMap(false)
 	s.Start()
 	defer s.Shutdown()
 
 	time.Sleep(100 * time.Millisecond)
 	gtest.C(t, func(t *gtest.T) {
-		prefix := fmt.Sprintf("http://127.0.0.1:%d", p)
+		prefix := fmt.Sprintf("http://127.0.0.1:%d", s.GetListenedPort())
 		client := g.Client()
 		client.SetPrefix(prefix)
 
@@ -510,8 +520,7 @@ func Test_Params_Parse_DefaultValueTag(t *testing.T) {
 		Name  string  `d:"john"`
 		Score float32 `d:"60"`
 	}
-	p, _ := gtcp.GetFreePort()
-	s := g.Server(p)
+	s := g.Server(guid.S())
 	s.BindHandler("/parse", func(r *ghttp.Request) {
 		var t *T
 		if err := r.Parse(&t); err != nil {
@@ -519,14 +528,13 @@ func Test_Params_Parse_DefaultValueTag(t *testing.T) {
 		}
 		r.Response.WriteExit(t)
 	})
-	s.SetPort(p)
 	s.SetDumpRouterMap(false)
 	s.Start()
 	defer s.Shutdown()
 
 	time.Sleep(100 * time.Millisecond)
 	gtest.C(t, func(t *gtest.T) {
-		prefix := fmt.Sprintf("http://127.0.0.1:%d", p)
+		prefix := fmt.Sprintf("http://127.0.0.1:%d", s.GetListenedPort())
 		client := g.Client()
 		client.SetPrefix(prefix)
 
@@ -543,8 +551,7 @@ func Test_Params_Parse_Validation(t *testing.T) {
 		Pass2 string `p:"password2" v:"required|length:6,30|same:password1#请确认密码|密码长度不够|两次密码不一致"`
 	}
 
-	p, _ := gtcp.GetFreePort()
-	s := g.Server(p)
+	s := g.Server(guid.S())
 	s.BindHandler("/parse", func(r *ghttp.Request) {
 		var req *RegisterReq
 		if err := r.Parse(&req); err != nil {
@@ -553,19 +560,18 @@ func Test_Params_Parse_Validation(t *testing.T) {
 			r.Response.Write("ok")
 		}
 	})
-	s.SetPort(p)
 	s.SetDumpRouterMap(false)
 	s.Start()
 	defer s.Shutdown()
 
 	time.Sleep(100 * time.Millisecond)
 	gtest.C(t, func(t *gtest.T) {
-		prefix := fmt.Sprintf("http://127.0.0.1:%d", p)
+		prefix := fmt.Sprintf("http://127.0.0.1:%d", s.GetListenedPort())
 		client := g.Client()
 		client.SetPrefix(prefix)
 
-		t.Assert(client.GetContent(ctx, "/parse"), `请输入账号; 账号长度为6到30位; 请输入密码; 密码长度不够; 请确认密码; 密码长度不够; 两次密码不一致`)
-		t.Assert(client.GetContent(ctx, "/parse?name=john11&password1=123456&password2=123"), `密码长度不够; 两次密码不一致`)
+		t.Assert(client.GetContent(ctx, "/parse"), `请输入账号`)
+		t.Assert(client.GetContent(ctx, "/parse?name=john11&password1=123456&password2=123"), `密码长度不够`)
 		t.Assert(client.GetContent(ctx, "/parse?name=john&password1=123456&password2=123456"), `账号长度为6到30位`)
 		t.Assert(client.GetContent(ctx, "/parse?name=john11&password1=123456&password2=123456"), `ok`)
 	})
@@ -589,8 +595,7 @@ func Test_Params_Parse_EmbeddedWithAliasName1(t *testing.T) {
 		Size       int  `d:"10" v:"max:50#分页数量最大50条"`
 	}
 
-	p, _ := gtcp.GetFreePort()
-	s := g.Server(p)
+	s := g.Server(guid.S())
 	s.BindHandler("/parse", func(r *ghttp.Request) {
 		var req *ContentGetListReq
 		if err := r.Parse(&req); err != nil {
@@ -599,14 +604,13 @@ func Test_Params_Parse_EmbeddedWithAliasName1(t *testing.T) {
 			r.Response.Write(req.ContentGetListInput)
 		}
 	})
-	s.SetPort(p)
 	s.SetDumpRouterMap(false)
 	s.Start()
 	defer s.Shutdown()
 
 	time.Sleep(100 * time.Millisecond)
 	gtest.C(t, func(t *gtest.T) {
-		prefix := fmt.Sprintf("http://127.0.0.1:%d", p)
+		prefix := fmt.Sprintf("http://127.0.0.1:%d", s.GetListenedPort())
 		client := g.Client()
 		client.SetPrefix(prefix)
 
@@ -632,8 +636,7 @@ func Test_Params_Parse_EmbeddedWithAliasName2(t *testing.T) {
 		Size       int  `d:"10" v:"max:50#分页数量最大50条"`
 	}
 
-	p, _ := gtcp.GetFreePort()
-	s := g.Server(p)
+	s := g.Server(guid.S())
 	s.BindHandler("/parse", func(r *ghttp.Request) {
 		var req *ContentGetListReq
 		if err := r.Parse(&req); err != nil {
@@ -642,17 +645,219 @@ func Test_Params_Parse_EmbeddedWithAliasName2(t *testing.T) {
 			r.Response.Write(req.ContentGetListInput)
 		}
 	})
-	s.SetPort(p)
 	s.SetDumpRouterMap(false)
 	s.Start()
 	defer s.Shutdown()
 
 	time.Sleep(100 * time.Millisecond)
 	gtest.C(t, func(t *gtest.T) {
-		prefix := fmt.Sprintf("http://127.0.0.1:%d", p)
+		prefix := fmt.Sprintf("http://127.0.0.1:%d", s.GetListenedPort())
 		client := g.Client()
 		client.SetPrefix(prefix)
 
 		t.Assert(client.GetContent(ctx, "/parse?cate=1&page=2&size=10"), `{"Type":"","CategoryId":1,"Page":2,"Size":10,"Sort":0,"UserId":0}`)
+	})
+}
+
+func Test_Params_GetParam(t *testing.T) {
+	s := g.Server(guid.S())
+	s.BindHandler("/", func(r *ghttp.Request) {
+		r.Response.Write(r.GetParam("key", "val"))
+	})
+	s.SetDumpRouterMap(false)
+	s.Start()
+	defer s.Shutdown()
+
+	time.Sleep(100 * time.Millisecond)
+	gtest.C(t, func(t *gtest.T) {
+		prefix := fmt.Sprintf("http://127.0.0.1:%d", s.GetListenedPort())
+		client := g.Client()
+		client.SetPrefix(prefix)
+
+		t.Assert(client.PostContent(ctx, "/"), "val")
+	})
+}
+
+func Test_Params_SetQuery(t *testing.T) {
+	s := g.Server(guid.S())
+	s.BindHandler("/SetQuery", func(r *ghttp.Request) {
+		r.SetQuery("a", 100)
+		r.Response.Write(r.GetQuery("a"))
+	})
+	s.SetDumpRouterMap(false)
+	s.Start()
+	defer s.Shutdown()
+
+	time.Sleep(100 * time.Millisecond)
+	gtest.C(t, func(t *gtest.T) {
+		prefix := fmt.Sprintf("http://127.0.0.1:%d", s.GetListenedPort())
+		client := g.Client()
+		client.SetPrefix(prefix)
+
+		t.Assert(client.GetContent(ctx, "/SetQuery"), "100")
+		t.Assert(client.GetContent(ctx, "/SetQuery?a=1"), "100")
+	})
+}
+
+func Test_Params_GetQuery(t *testing.T) {
+	s := g.Server(guid.S())
+	s.BindHandler("/GetQuery", func(r *ghttp.Request) {
+		r.Response.Write(r.GetQuery("a", 200))
+	})
+	s.SetDumpRouterMap(false)
+	s.Start()
+	defer s.Shutdown()
+
+	time.Sleep(100 * time.Millisecond)
+	gtest.C(t, func(t *gtest.T) {
+		prefix := fmt.Sprintf("http://127.0.0.1:%d", s.GetListenedPort())
+		client := g.Client()
+		client.SetPrefix(prefix)
+
+		t.Assert(client.GetContent(ctx, "/GetQuery"), 200)
+		t.Assert(client.SetContentType("application/json").GetContent(ctx, "/GetQuery", "a=100"), 100)
+	})
+}
+
+func Test_Params_GetQueryMap(t *testing.T) {
+	s := g.Server(guid.S())
+	s.BindHandler("/GetQueryMap", func(r *ghttp.Request) {
+		if m := r.GetQueryMap(); len(m) > 0 {
+			r.Response.Write(m["name"])
+		}
+	})
+	s.BindHandler("/GetQueryMapWithKVMap", func(r *ghttp.Request) {
+		if m := r.GetQueryMap(map[string]interface{}{"id": 1}); len(m) > 0 {
+			r.Response.Write(m["id"])
+		}
+	})
+	s.SetDumpRouterMap(false)
+	s.Start()
+	defer s.Shutdown()
+
+	time.Sleep(100 * time.Millisecond)
+
+	gtest.C(t, func(t *gtest.T) {
+		prefix := fmt.Sprintf("http://127.0.0.1:%d", s.GetListenedPort())
+		client := g.Client()
+		client.SetPrefix(prefix)
+		client.SetContentType("application/json")
+		t.Assert(client.GetContent(ctx, "/GetQueryMap", "id=1&name=john"), `john`)
+	})
+	gtest.C(t, func(t *gtest.T) {
+		prefix := fmt.Sprintf("http://127.0.0.1:%d", s.GetListenedPort())
+		client := g.Client()
+		client.SetPrefix(prefix)
+		t.Assert(client.GetContent(ctx, "/GetQueryMapWithKVMap"), 1)
+		t.Assert(client.GetContent(ctx, "/GetQueryMapWithKVMap", "name=john"), 1)
+		t.Assert(client.GetContent(ctx, "/GetQueryMapWithKVMap", "id=2&name=john"), 2)
+		client.SetContentType("application/json")
+		t.Assert(client.GetContent(ctx, "/GetQueryMapWithKVMap", "name=john"), 1)
+		t.Assert(client.GetContent(ctx, "/GetQueryMapWithKVMap", "id=2&name=john"), 2)
+	})
+}
+
+func Test_Params_GetQueryMapStrStr(t *testing.T) {
+	s := g.Server(guid.S())
+	s.BindHandler("/GetQueryMapStrStr", func(r *ghttp.Request) {
+		r.Response.Write(r.GetQueryMapStrStr())
+	})
+	s.SetDumpRouterMap(false)
+	s.Start()
+	defer s.Shutdown()
+
+	time.Sleep(100 * time.Millisecond)
+	gtest.C(t, func(t *gtest.T) {
+		prefix := fmt.Sprintf("http://127.0.0.1:%d", s.GetListenedPort())
+		client := g.Client()
+		client.SetPrefix(prefix)
+
+		t.Assert(client.GetContent(ctx, "/GetQueryMapStrStr"), "")
+	})
+}
+
+func Test_Params_GetQueryMapStrVar(t *testing.T) {
+	s := g.Server(guid.S())
+	s.BindHandler("/GetQueryMapStrVar", func(r *ghttp.Request) {
+		m := r.GetQueryMapStrVar()
+		r.Response.Write(m["id"])
+	})
+	s.SetDumpRouterMap(false)
+	s.Start()
+	defer s.Shutdown()
+
+	time.Sleep(100 * time.Millisecond)
+	gtest.C(t, func(t *gtest.T) {
+		prefix := fmt.Sprintf("http://127.0.0.1:%d", s.GetListenedPort())
+		client := g.Client()
+		client.SetPrefix(prefix)
+
+		t.Assert(client.GetContent(ctx, "/GetQueryMapStrVar"), "")
+		t.Assert(client.GetContent(ctx, "/GetQueryMapStrVar", "id=1"), 1)
+	})
+}
+
+func Test_Params_GetRequest(t *testing.T) {
+	s := g.Server(guid.S())
+	s.BindHandler("/GetRequest", func(r *ghttp.Request) {
+		r.Response.Write(r.GetRequest("id"))
+	})
+	s.BindHandler("/GetRequestWithDef", func(r *ghttp.Request) {
+		r.Response.Write(r.GetRequest("id", 2))
+	})
+	s.SetDumpRouterMap(false)
+	s.Start()
+	defer s.Shutdown()
+
+	time.Sleep(100 * time.Millisecond)
+	gtest.C(t, func(t *gtest.T) {
+		prefix := fmt.Sprintf("http://127.0.0.1:%d", s.GetListenedPort())
+		client := g.Client()
+		client.SetPrefix(prefix)
+
+		t.Assert(client.GetContent(ctx, "/GetRequestWithDef"), 2)
+
+		client.SetContentType("application/json")
+		t.Assert(client.GetContent(ctx, "/GetRequest", "id=1"), 1)
+	})
+}
+
+func Test_Params_GetRequestMapStrStr(t *testing.T) {
+	s := g.Server(guid.S())
+	s.BindHandler("/GetRequestMapStrStr", func(r *ghttp.Request) {
+		r.Response.Write(r.GetRequestMapStrStr())
+	})
+	s.SetDumpRouterMap(false)
+	s.Start()
+	defer s.Shutdown()
+
+	time.Sleep(100 * time.Millisecond)
+	gtest.C(t, func(t *gtest.T) {
+		prefix := fmt.Sprintf("http://127.0.0.1:%d", s.GetListenedPort())
+		client := g.Client()
+		client.SetPrefix(prefix)
+
+		t.Assert(client.GetContent(ctx, "/GetRequestMapStrStr"), "")
+	})
+}
+
+func Test_Params_GetRequestMapStrVar(t *testing.T) {
+	s := g.Server(guid.S())
+	s.BindHandler("/GetRequestMapStrVar", func(r *ghttp.Request) {
+		m := r.GetRequestMapStrVar()
+		r.Response.Write(m["id"])
+	})
+	s.SetDumpRouterMap(false)
+	s.Start()
+	defer s.Shutdown()
+
+	time.Sleep(100 * time.Millisecond)
+	gtest.C(t, func(t *gtest.T) {
+		prefix := fmt.Sprintf("http://127.0.0.1:%d", s.GetListenedPort())
+		client := g.Client()
+		client.SetPrefix(prefix)
+
+		t.Assert(client.GetContent(ctx, "/GetRequestMapStrVar"), "")
+		t.Assert(client.GetContent(ctx, "/GetRequestMapStrVar", "id=1"), 1)
 	})
 }

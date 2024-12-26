@@ -7,7 +7,6 @@
 package ghttp
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -19,6 +18,7 @@ import (
 	"github.com/gogf/gf/v2/os/gtime"
 	"github.com/gogf/gf/v2/os/gview"
 	"github.com/gogf/gf/v2/text/gregex"
+	"github.com/gogf/gf/v2/text/gstr"
 	"github.com/gogf/gf/v2/util/guid"
 )
 
@@ -30,8 +30,8 @@ type Request struct {
 	Session    *gsession.Session // Session.
 	Response   *Response         // Corresponding Response of this request.
 	Router     *Router           // Matched Router for this request. Note that it's not available in HOOK handler.
-	EnterTime  int64             // Request starting time in microseconds.
-	LeaveTime  int64             // Request ending time in microseconds.
+	EnterTime  *gtime.Time       // Request starting time in milliseconds.
+	LeaveTime  *gtime.Time       // Request to end time in milliseconds.
 	Middleware *middleware       // Middleware manager.
 	StaticFile *staticFile       // Static file object for static file serving.
 
@@ -39,19 +39,19 @@ type Request struct {
 	// Private attributes for internal usage purpose.
 	// =================================================================================================================
 
-	context         context.Context        // Custom context for internal usage purpose.
-	handlers        []*handlerParsedItem   // All matched handlers containing handler, hook and middleware for this request.
-	handlerResponse handlerResponse        // Handler response object and its error value for Request/Response handler.
+	handlers        []*HandlerItemParsed   // All matched handlers containing handler, hook and middleware for this request.
+	serveHandler    *HandlerItemParsed     // Real handler serving for this request, not hook or middleware.
+	handlerResponse interface{}            // Handler response object for Request/Response handler.
 	hasHookHandler  bool                   // A bool marking whether there's hook handler in the handlers for performance purpose.
 	hasServeHandler bool                   // A bool marking whether there's serving handler in the handlers for performance purpose.
 	parsedQuery     bool                   // A bool marking whether the GET parameters parsed.
 	parsedBody      bool                   // A bool marking whether the request body parsed.
 	parsedForm      bool                   // A bool marking whether request Form parsed for HTTP method PUT, POST, PATCH.
 	paramsMap       map[string]interface{} // Custom parameters map.
-	routerMap       map[string]string      // Router parameters map, which might be nil if there're no router parameters.
+	routerMap       map[string]string      // Router parameters map, which might be nil if there are no router parameters.
 	queryMap        map[string]interface{} // Query parameters map, which is nil if there's no query string.
-	formMap         map[string]interface{} // Form parameters map, which is nil if there's no form data from client.
-	bodyMap         map[string]interface{} // Body parameters map, which might be nil if there're no body content.
+	formMap         map[string]interface{} // Form parameters map, which is nil if there's no form of data from the client.
+	bodyMap         map[string]interface{} // Body parameters map, which might be nil if their nobody content.
 	error           error                  // Current executing error of the request.
 	exitAll         bool                   // A bool marking whether current request is exited.
 	parsedHost      string                 // The parsed host name for current host used by GetHost function.
@@ -61,11 +61,6 @@ type Request struct {
 	viewObject      *gview.View            // Custom template view engine object for this response.
 	viewParams      gview.Params           // Custom template view variables for this response.
 	originUrlPath   string                 // Original URL path that passed from client.
-}
-
-type handlerResponse struct {
-	Object interface{}
-	Error  error
 }
 
 // staticFile is the file struct for static file service.
@@ -81,7 +76,7 @@ func newRequest(s *Server, r *http.Request, w http.ResponseWriter) *Request {
 		Server:        s,
 		Request:       r,
 		Response:      newResponse(s, w),
-		EnterTime:     gtime.TimestampMilli(),
+		EnterTime:     gtime.Now(),
 		originUrlPath: r.URL.Path,
 	}
 	request.Cookie = GetCookie(request)
@@ -122,6 +117,8 @@ func newRequest(s *Server, r *http.Request, w http.ResponseWriter) *Request {
 // WebSocket upgrades current request as a websocket request.
 // It returns a new WebSocket object if success, or the error if failure.
 // Note that the request should be a websocket request, or it will surely fail upgrading.
+//
+// Deprecated: will be removed in the future, please use third-party websocket library instead.
 func (r *Request) WebSocket() (*WebSocket, error) {
 	if conn, err := wsUpGrader.Upgrade(r.Response.Writer, r.Request, nil); err == nil {
 		return &WebSocket{
@@ -184,30 +181,31 @@ func (r *Request) IsAjaxRequest() bool {
 // GetClientIp returns the client ip of this request without port.
 // Note that this ip address might be modified by client header.
 func (r *Request) GetClientIp() string {
-	if len(r.clientIp) == 0 {
-		realIps := r.Header.Get("X-Forwarded-For")
-		if realIps != "" && len(realIps) != 0 && !strings.EqualFold("unknown", realIps) {
-			ipArray := strings.Split(realIps, ",")
-			r.clientIp = ipArray[0]
-		}
-		if r.clientIp == "" || strings.EqualFold("unknown", realIps) {
-			r.clientIp = r.Header.Get("Proxy-Client-IP")
-		}
-		if r.clientIp == "" || strings.EqualFold("unknown", realIps) {
-			r.clientIp = r.Header.Get("WL-Proxy-Client-IP")
-		}
-		if r.clientIp == "" || strings.EqualFold("unknown", realIps) {
-			r.clientIp = r.Header.Get("HTTP_CLIENT_IP")
-		}
-		if r.clientIp == "" || strings.EqualFold("unknown", realIps) {
-			r.clientIp = r.Header.Get("HTTP_X_FORWARDED_FOR")
-		}
-		if r.clientIp == "" || strings.EqualFold("unknown", realIps) {
-			r.clientIp = r.Header.Get("X-Real-IP")
-		}
-		if r.clientIp == "" || strings.EqualFold("unknown", realIps) {
-			r.clientIp = r.GetRemoteIp()
-		}
+	if r.clientIp != "" {
+		return r.clientIp
+	}
+	realIps := r.Header.Get("X-Forwarded-For")
+	if realIps != "" && len(realIps) != 0 && !strings.EqualFold("unknown", realIps) {
+		ipArray := strings.Split(realIps, ",")
+		r.clientIp = ipArray[0]
+	}
+	if r.clientIp == "" {
+		r.clientIp = r.Header.Get("Proxy-Client-IP")
+	}
+	if r.clientIp == "" {
+		r.clientIp = r.Header.Get("WL-Proxy-Client-IP")
+	}
+	if r.clientIp == "" {
+		r.clientIp = r.Header.Get("HTTP_CLIENT_IP")
+	}
+	if r.clientIp == "" {
+		r.clientIp = r.Header.Get("HTTP_X_FORWARDED_FOR")
+	}
+	if r.clientIp == "" {
+		r.clientIp = r.Header.Get("X-Real-IP")
+	}
+	if r.clientIp == "" {
+		r.clientIp = r.GetRemoteIp()
 	}
 	return r.clientIp
 }
@@ -221,10 +219,26 @@ func (r *Request) GetRemoteIp() string {
 	return r.RemoteAddr
 }
 
+// GetSchema returns the schema of this request.
+func (r *Request) GetSchema() string {
+	var (
+		scheme = "http"
+		proto  = r.Header.Get("X-Forwarded-Proto")
+	)
+	if r.TLS != nil || gstr.Equal(proto, "https") {
+		scheme = "https"
+	}
+	return scheme
+}
+
 // GetUrl returns current URL of this request.
 func (r *Request) GetUrl() string {
-	scheme := "http"
-	if r.TLS != nil {
+	var (
+		scheme = "http"
+		proto  = r.Header.Get("X-Forwarded-Proto")
+	)
+
+	if r.TLS != nil || gstr.Equal(proto, "https") {
 		scheme = "https"
 	}
 	return fmt.Sprintf(`%s://%s%s`, scheme, r.Host, r.URL.String())
@@ -250,9 +264,14 @@ func (r *Request) GetError() error {
 	return r.error
 }
 
+// SetError sets custom error for current request.
+func (r *Request) SetError(err error) {
+	r.error = err
+}
+
 // ReloadParam is used for modifying request parameter.
 // Sometimes, we want to modify request parameters through middleware, but directly modifying Request.Body
-// is invalid, so it clears the parsed* marks to make the parameters re-parsed.
+// is invalid, so it clears the parsed* marks of Request to make the parameters reparsed.
 func (r *Request) ReloadParam() {
 	r.parsedBody = false
 	r.parsedForm = false
@@ -261,6 +280,11 @@ func (r *Request) ReloadParam() {
 }
 
 // GetHandlerResponse retrieves and returns the handler response object and its error.
-func (r *Request) GetHandlerResponse() (res interface{}, err error) {
-	return r.handlerResponse.Object, r.handlerResponse.Error
+func (r *Request) GetHandlerResponse() interface{} {
+	return r.handlerResponse
+}
+
+// GetServeHandler retrieves and returns the user defined handler used to serve this request.
+func (r *Request) GetServeHandler() *HandlerItemParsed {
+	return r.serveHandler
 }

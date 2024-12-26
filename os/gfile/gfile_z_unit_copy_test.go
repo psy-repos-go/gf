@@ -7,11 +7,13 @@
 package gfile_test
 
 import (
+	"os"
 	"testing"
 
 	"github.com/gogf/gf/v2/os/gfile"
 	"github.com/gogf/gf/v2/os/gtime"
 	"github.com/gogf/gf/v2/test/gtest"
+	"github.com/gogf/gf/v2/util/guid"
 )
 
 func Test_Copy(t *testing.T) {
@@ -28,7 +30,42 @@ func Test_Copy(t *testing.T) {
 		defer delTestFiles(topath)
 
 		t.Assert(gfile.IsFile(testpath()+topath), true)
-		t.AssertNE(gfile.Copy("", ""), nil)
+		t.AssertNE(gfile.Copy(paths, ""), nil)
+		t.AssertNE(gfile.Copy("", topath), nil)
+	})
+}
+
+func Test_Copy_File_To_Dir(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		var (
+			src = gtest.DataPath("dir1", "file1")
+			dst = gfile.Temp(guid.S(), "dir2")
+		)
+		err := gfile.Mkdir(dst)
+		t.AssertNil(err)
+		defer gfile.Remove(dst)
+
+		err = gfile.Copy(src, dst)
+		t.AssertNil(err)
+
+		expectPath := gfile.Join(dst, "file1")
+		t.Assert(gfile.GetContents(expectPath), gfile.GetContents(src))
+	})
+}
+
+func Test_Copy_Dir_To_File(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		var (
+			src = gtest.DataPath("dir1")
+			dst = gfile.Temp(guid.S(), "file2")
+		)
+		f, err := gfile.Create(dst)
+		t.AssertNil(err)
+		defer f.Close()
+		defer gfile.Remove(dst)
+
+		err = gfile.Copy(src, dst)
+		t.AssertNE(err, nil)
 	})
 }
 
@@ -46,12 +83,13 @@ func Test_CopyFile(t *testing.T) {
 		defer delTestFiles(topath)
 
 		t.Assert(gfile.IsFile(testpath()+topath), true)
-		t.AssertNE(gfile.CopyFile("", ""), nil)
+		t.AssertNE(gfile.CopyFile(paths, ""), nil)
+		t.AssertNE(gfile.CopyFile("", topath), nil)
 	})
 	// Content replacement.
 	gtest.C(t, func(t *gtest.T) {
-		src := gfile.TempDir(gtime.TimestampNanoStr())
-		dst := gfile.TempDir(gtime.TimestampNanoStr())
+		src := gfile.Temp(gtime.TimestampNanoStr())
+		dst := gfile.Temp(gtime.TimestampNanoStr())
 		srcContent := "1"
 		dstContent := "1"
 		t.Assert(gfile.PutContents(src, srcContent), nil)
@@ -62,6 +100,41 @@ func Test_CopyFile(t *testing.T) {
 		t.Assert(gfile.CopyFile(src, dst), nil)
 		t.Assert(gfile.GetContents(src), srcContent)
 		t.Assert(gfile.GetContents(dst), srcContent)
+	})
+	// Set mode
+	gtest.C(t, func(t *gtest.T) {
+		var (
+			src     = "/testfile_copyfile1.txt"
+			dst     = "/testfile_copyfile2.txt"
+			dstMode = os.FileMode(0600)
+		)
+		t.AssertNil(createTestFile(src, ""))
+		defer delTestFiles(src)
+
+		t.Assert(gfile.CopyFile(testpath()+src, testpath()+dst, gfile.CopyOption{Mode: dstMode}), nil)
+		defer delTestFiles(dst)
+
+		dstStat, err := gfile.Stat(testpath() + dst)
+		t.AssertNil(err)
+		t.Assert(dstStat.Mode().Perm(), dstMode)
+	})
+	// Preserve src file's mode
+	gtest.C(t, func(t *gtest.T) {
+		var (
+			src = "/testfile_copyfile1.txt"
+			dst = "/testfile_copyfile2.txt"
+		)
+		t.AssertNil(createTestFile(src, ""))
+		defer delTestFiles(src)
+
+		t.Assert(gfile.CopyFile(testpath()+src, testpath()+dst, gfile.CopyOption{PreserveMode: true}), nil)
+		defer delTestFiles(dst)
+
+		srcStat, err := gfile.Stat(testpath() + src)
+		t.AssertNil(err)
+		dstStat, err := gfile.Stat(testpath() + dst)
+		t.AssertNil(err)
+		t.Assert(srcStat.Mode().Perm(), dstStat.Mode().Perm())
 	})
 }
 
@@ -111,8 +184,8 @@ func Test_CopyDir(t *testing.T) {
 	})
 	// Content replacement.
 	gtest.C(t, func(t *gtest.T) {
-		src := gfile.TempDir(gtime.TimestampNanoStr(), gtime.TimestampNanoStr())
-		dst := gfile.TempDir(gtime.TimestampNanoStr(), gtime.TimestampNanoStr())
+		src := gfile.Temp(gtime.TimestampNanoStr(), gtime.TimestampNanoStr())
+		dst := gfile.Temp(gtime.TimestampNanoStr(), gtime.TimestampNanoStr())
 		defer func() {
 			gfile.Remove(src)
 			gfile.Remove(dst)
@@ -125,8 +198,11 @@ func Test_CopyDir(t *testing.T) {
 		t.Assert(gfile.GetContents(dst), dstContent)
 
 		err := gfile.CopyDir(gfile.Dir(src), gfile.Dir(dst))
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(gfile.GetContents(src), srcContent)
 		t.Assert(gfile.GetContents(dst), srcContent)
+
+		t.AssertNE(gfile.CopyDir(gfile.Dir(src), ""), nil)
+		t.AssertNE(gfile.CopyDir("", gfile.Dir(dst)), nil)
 	})
 }

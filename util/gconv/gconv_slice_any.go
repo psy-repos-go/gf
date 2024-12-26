@@ -9,7 +9,9 @@ package gconv
 import (
 	"reflect"
 
-	"github.com/gogf/gf/v2/internal/utils"
+	"github.com/gogf/gf/v2/internal/json"
+	"github.com/gogf/gf/v2/internal/reflection"
+	"github.com/gogf/gf/v2/util/gconv/internal/localinterface"
 )
 
 // SliceAny is alias of Interfaces.
@@ -22,13 +24,10 @@ func Interfaces(any interface{}) []interface{} {
 	if any == nil {
 		return nil
 	}
-	if r, ok := any.([]interface{}); ok {
-		return r
-	}
-	var (
-		array []interface{} = nil
-	)
+	var array []interface{}
 	switch value := any.(type) {
+	case []interface{}:
+		array = value
 	case []string:
 		array = make([]interface{}, len(value))
 		for k, v := range value {
@@ -65,9 +64,13 @@ func Interfaces(any interface{}) []interface{} {
 			array[k] = v
 		}
 	case []uint8:
-		array = make([]interface{}, len(value))
-		for k, v := range value {
-			array[k] = v
+		if json.Valid(value) {
+			_ = json.UnmarshalUseNumber(value, &array)
+		} else {
+			array = make([]interface{}, len(value))
+			for k, v := range value {
+				array[k] = v
+			}
 		}
 	case []uint16:
 		array = make([]interface{}, len(value))
@@ -102,7 +105,7 @@ func Interfaces(any interface{}) []interface{} {
 	if array != nil {
 		return array
 	}
-	if v, ok := any.(iInterfaces); ok {
+	if v, ok := any.(localinterface.IInterfaces); ok {
 		return v.Interfaces()
 	}
 	// JSON format string value converting.
@@ -110,7 +113,7 @@ func Interfaces(any interface{}) []interface{} {
 		return array
 	}
 	// Not a common type, it then uses reflection for conversion.
-	originValueAndKind := utils.OriginValueAndKind(any)
+	originValueAndKind := reflection.OriginValueAndKind(any)
 	switch originValueAndKind.OriginKind {
 	case reflect.Slice, reflect.Array:
 		var (
@@ -123,9 +126,6 @@ func Interfaces(any interface{}) []interface{} {
 		return slice
 
 	default:
-		if originValueAndKind.OriginValue.IsZero() {
-			return []interface{}{}
-		}
 		return []interface{}{any}
 	}
 }

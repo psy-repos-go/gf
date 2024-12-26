@@ -18,15 +18,11 @@ import (
 	"github.com/gogf/gf/v2/debug/gdebug"
 	"github.com/gogf/gf/v2/errors/gcode"
 	"github.com/gogf/gf/v2/errors/gerror"
-	"github.com/gogf/gf/v2/internal/utils"
-	"github.com/gogf/gf/v2/protocol/goai"
+	"github.com/gogf/gf/v2/internal/consts"
 	"github.com/gogf/gf/v2/text/gregex"
 	"github.com/gogf/gf/v2/text/gstr"
 	"github.com/gogf/gf/v2/util/gmeta"
-)
-
-const (
-	stackFilterKey = "/net/ghttp/ghttp"
+	"github.com/gogf/gf/v2/util/gtag"
 )
 
 var (
@@ -34,11 +30,11 @@ var (
 	handlerIdGenerator = gtype.NewInt()
 )
 
-// routerMapKey creates and returns an unique router key for given parameters.
+// routerMapKey creates and returns a unique router key for given parameters.
 // This key is used for Server.routerMap attribute, which is mainly for checks for
 // repeated router registering.
-func (s *Server) routerMapKey(hook, method, path, domain string) string {
-	return hook + "%" + s.serveHandlerKey(method, path, domain)
+func (s *Server) routerMapKey(hook HookName, method, path, domain string) string {
+	return string(hook) + "%" + s.serveHandlerKey(method, path, domain)
 }
 
 // parsePattern parses the given pattern to domain, method and path variable.
@@ -70,11 +66,11 @@ func (s *Server) parsePattern(pattern string) (domain, method, path string, err 
 type setHandlerInput struct {
 	Prefix      string
 	Pattern     string
-	HandlerItem *handlerItem
+	HandlerItem *HandlerItem
 }
 
-// setHandler creates router item with given handler and pattern and registers the handler to the router tree.
-// The router tree can be treated as a multilayer hash table, please refer to the comment in following codes.
+// setHandler creates router item with a given handler and pattern and registers the handler to the router tree.
+// The router tree can be treated as a multilayer hash table, please refer to the comment in the following codes.
 // This function is called during server starts up, which cares little about the performance. What really cares
 // is the well-designed router storage structure for router searching when the request is under serving.
 func (s *Server) setHandler(ctx context.Context, in setHandlerInput) {
@@ -86,9 +82,8 @@ func (s *Server) setHandler(ctx context.Context, in setHandlerInput) {
 	if handler.Name == "" {
 		handler.Name = runtime.FuncForPC(handler.Info.Value.Pointer()).Name()
 	}
-	handler.Id = handlerIdGenerator.Add(1)
 	if handler.Source == "" {
-		_, file, line := gdebug.CallerWithFilter([]string{utils.StackFilterKeyForGoFrame})
+		_, file, line := gdebug.CallerWithFilter([]string{consts.StackFilterKeyForGoFrame})
 		handler.Source = fmt.Sprintf(`%s:%d`, file, line)
 	}
 	domain, method, uri, err := s.parsePattern(pattern)
@@ -96,48 +91,92 @@ func (s *Server) setHandler(ctx context.Context, in setHandlerInput) {
 		s.Logger().Fatalf(ctx, `invalid pattern "%s", %+v`, pattern, err)
 		return
 	}
-
-	// Change the registered route according meta info from its request structure.
+	// ====================================================================================
+	// Change the registered route according to meta info from its request structure.
+	// It supports multiple methods that are joined using char `,`.
+	// ====================================================================================
 	if handler.Info.Type != nil && handler.Info.Type.NumIn() == 2 {
-		var (
-			objectReq = reflect.New(handler.Info.Type.In(1))
-		)
-		if v := gmeta.Get(objectReq, goai.TagNamePath); !v.IsEmpty() {
+		var objectReq = reflect.New(handler.Info.Type.In(1))
+		if v := gmeta.Get(objectReq, gtag.Path); !v.IsEmpty() {
 			uri = v.String()
 		}
-		if v := gmeta.Get(objectReq, goai.TagNameMethod); !v.IsEmpty() {
-			method = v.String()
-		}
-		if v := gmeta.Get(objectReq, goai.TagNameDomain); !v.IsEmpty() {
+		if v := gmeta.Get(objectReq, gtag.Domain); !v.IsEmpty() {
 			domain = v.String()
 		}
+		if v := gmeta.Get(objectReq, gtag.Method); !v.IsEmpty() {
+			method = v.String()
+		}
+		// Multiple methods registering, which are joined using char `,`.
+		if gstr.Contains(method, ",") {
+			methods := gstr.SplitAndTrim(method, ",")
+			for _, v := range methods {
+				// Each method has it own handler.
+				clonedHandler := *handler
+				s.doSetHandler(ctx, &clonedHandler, prefix, uri, pattern, v, domain)
+			}
+			return
+		}
+		// Converts `all` to `ALL`.
+		if gstr.Equal(method, defaultMethod) {
+			method = defaultMethod
+		}
 	}
+	s.doSetHandler(ctx, handler, prefix, uri, pattern, method, domain)
+}
 
+func (s *Server) doSetHandler(
+	ctx context.Context, handler *HandlerItem,
+	prefix, uri, pattern, method, domain string,
+) {
+	if !s.isValidMethod(method) {
+		s.Logger().Fatalf(
+			ctx,
+			`invalid method value "%s", should be in "%s" or "%s"`,
+			method, supportedHttpMethods, defaultMethod,
+		)
+	}
 	// Prefix for URI feature.
 	if prefix != "" {
 		uri = prefix + "/" + strings.TrimLeft(uri, "/")
 	}
+	uri = strings.TrimRight(uri, "/")
+	if uri == "" {
+		uri = "/"
+	}
 
 	if len(uri) == 0 || uri[0] != '/' {
 		s.Logger().Fatalf(ctx, `invalid pattern "%s", URI should lead with '/'`, pattern)
-		return
 	}
 
 	// Repeated router checks, this feature can be disabled by server configuration.
-	routerKey := s.routerMapKey(handler.HookName, method, uri, domain)
+	var routerKey = s.routerMapKey(handler.HookName, method, uri, domain)
 	if !s.config.RouteOverWrite {
 		switch handler.Type {
 		case HandlerTypeHandler, HandlerTypeObject:
-			if item, ok := s.routesMap[routerKey]; ok {
-				s.Logger().Fatalf(
-					ctx,
-					`duplicated route registry "%s" at %s , already registered at %s`,
-					pattern, handler.Source, item[0].Source,
-				)
-				return
+			if items, ok := s.routesMap[routerKey]; ok {
+				var duplicatedHandler *HandlerItem
+				for i, item := range items {
+					switch item.Type {
+					case HandlerTypeHandler, HandlerTypeObject:
+						duplicatedHandler = items[i]
+					}
+					if duplicatedHandler != nil {
+						break
+					}
+				}
+				if duplicatedHandler != nil {
+					s.Logger().Fatalf(
+						ctx,
+						"The duplicated route registry [%s] which is meaning [{hook}%%{method}:{path}@{domain}] at \n%s -> %s , which has already been registered at \n%s -> %s"+
+							"\nYou can disable duplicate route detection by modifying the server.routeOverWrite configuration, but this will cause some routes to be overwritten",
+						routerKey, handler.Source, handler.Name, duplicatedHandler.Source, duplicatedHandler.Name,
+					)
+				}
 			}
 		}
 	}
+	// Unique id for each handler.
+	handler.Id = handlerIdGenerator.Add(1)
 	// Create a new router by given parameter.
 	handler.Router = &Router{
 		Uri:      uri,
@@ -152,8 +191,10 @@ func (s *Server) setHandler(ctx context.Context, in setHandlerInput) {
 	}
 	// List array, very important for router registering.
 	// There may be multiple lists adding into this array when searching from root to leaf.
-	lists := make([]*glist.List, 0)
-	array := ([]string)(nil)
+	var (
+		array []string
+		lists = make([]*glist.List, 0)
+	)
 	if strings.EqualFold("/", uri) {
 		array = []string{"/"}
 	} else {
@@ -167,10 +208,11 @@ func (s *Server) setHandler(ctx context.Context, in setHandlerInput) {
 	//    and the leaf node also has "*list" item. If the node is not a fuzzy node either
 	//    a leaf, it neither has "*list" item.
 	// 2. The "*list" item is a list containing registered router items ordered by their
-	//    priorities from high to low.
+	//    priorities from high to low. If it's a fuzzy node, all the sub router items
+	//    from this fuzzy node will also be added to its "*list" item.
 	// 3. There may be repeated router items in the router lists. The lists' priorities
 	//    from root to leaf are from low to high.
-	p := s.serveTree[domain]
+	var p = s.serveTree[domain]
 	for i, part := range array {
 		// Ignore empty URI part, like: /user//index
 		if part == "" {
@@ -189,7 +231,7 @@ func (s *Server) setHandler(ctx context.Context, in setHandlerInput) {
 				lists = append(lists, v.(*glist.List))
 			}
 		}
-		// Make a new bucket for current node.
+		// Make a new bucket for the current node.
 		if _, ok := p.(map[string]interface{})[part]; !ok {
 			p.(map[string]interface{})[part] = make(map[string]interface{})
 		}
@@ -211,11 +253,11 @@ func (s *Server) setHandler(ctx context.Context, in setHandlerInput) {
 	}
 	// It iterates the list array of `lists`, compares priorities and inserts the new router item in
 	// the proper position of each list. The priority of the list is ordered from high to low.
-	item := (*handlerItem)(nil)
+	var item *HandlerItem
 	for _, l := range lists {
 		pushed := false
 		for e := l.Front(); e != nil; e = e.Next() {
-			item = e.Value.(*handlerItem)
+			item = e.Value.(*HandlerItem)
 			// Checks the priority whether inserting the route item before current item,
 			// which means it has higher priority.
 			if s.compareRouterPriority(handler, item) {
@@ -232,21 +274,19 @@ func (s *Server) setHandler(ctx context.Context, in setHandlerInput) {
 	}
 	// Initialize the route map item.
 	if _, ok := s.routesMap[routerKey]; !ok {
-		s.routesMap[routerKey] = make([]registeredRouteItem, 0)
+		s.routesMap[routerKey] = make([]*HandlerItem, 0)
 	}
 
-	routeItem := registeredRouteItem{
-		Source:  handler.Source,
-		Handler: handler,
+	// Append the route.
+	s.routesMap[routerKey] = append(s.routesMap[routerKey], handler)
+}
+
+func (s *Server) isValidMethod(method string) bool {
+	if gstr.Equal(method, defaultMethod) {
+		return true
 	}
-	switch handler.Type {
-	case HandlerTypeHandler, HandlerTypeObject:
-		// Overwrite the route.
-		s.routesMap[routerKey] = []registeredRouteItem{routeItem}
-	default:
-		// Append the route.
-		s.routesMap[routerKey] = append(s.routesMap[routerKey], routeItem)
-	}
+	_, ok := methodsMap[strings.ToUpper(method)]
+	return ok
 }
 
 // compareRouterPriority compares the priority between `newItem` and `oldItem`. It returns true
@@ -257,8 +297,8 @@ func (s *Server) setHandler(ctx context.Context, in setHandlerInput) {
 // 1. The middleware has the most high priority.
 // 2. URI: The deeper, the higher (simply check the count of char '/' in the URI).
 // 3. Route type: {xxx} > :xxx > *xxx.
-func (s *Server) compareRouterPriority(newItem *handlerItem, oldItem *handlerItem) bool {
-	// If they're all type of middleware, the priority is according their registered sequence.
+func (s *Server) compareRouterPriority(newItem *HandlerItem, oldItem *HandlerItem) bool {
+	// If they're all types of middleware, the priority is according to their registered sequence.
 	if newItem.Type == HandlerTypeMiddleware && oldItem.Type == HandlerTypeMiddleware {
 		return false
 	}
@@ -336,7 +376,7 @@ func (s *Server) compareRouterPriority(newItem *handlerItem, oldItem *handlerIte
 		return false
 	}
 
-	// If the counts of their fuzzy rules equal.
+	// If the counts of their fuzzy rules are equal.
 
 	// Eg: /name/{act} > /name/:act
 	if fuzzyCountFieldNew > fuzzyCountFieldOld {
@@ -373,13 +413,13 @@ func (s *Server) compareRouterPriority(newItem *handlerItem, oldItem *handlerIte
 	return false
 }
 
-// patternToRegular converts route rule to according regular expression.
+// patternToRegular converts route rule to according to regular expression.
 func (s *Server) patternToRegular(rule string) (regular string, names []string) {
 	if len(rule) < 2 {
 		return rule, nil
 	}
 	regular = "^"
-	array := strings.Split(rule[1:], "/")
+	var array = strings.Split(rule[1:], "/")
 	for _, v := range array {
 		if len(v) == 0 {
 			continue

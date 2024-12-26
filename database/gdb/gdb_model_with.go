@@ -8,15 +8,14 @@ package gdb
 
 import (
 	"database/sql"
-	"fmt"
 	"reflect"
 
 	"github.com/gogf/gf/v2/errors/gcode"
 	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/gogf/gf/v2/internal/utils"
 	"github.com/gogf/gf/v2/os/gstructs"
-	"github.com/gogf/gf/v2/text/gregex"
 	"github.com/gogf/gf/v2/text/gstr"
+	"github.com/gogf/gf/v2/util/gutil"
 )
 
 // With creates and returns an ORM model based on metadata of given object.
@@ -24,19 +23,26 @@ import (
 // It can be called multiple times to add one or more objects to model and enable
 // their mode association operations feature.
 // For example, if given struct definition:
-// type User struct {
-//	 gmeta.Meta `orm:"table:user"`
-// 	 Id         int           `json:"id"`
-//	 Name       string        `json:"name"`
-//	 UserDetail *UserDetail   `orm:"with:uid=id"`
-//	 UserScores []*UserScores `orm:"with:uid=id"`
-// }
+//
+//	type User struct {
+//		 gmeta.Meta `orm:"table:user"`
+//		 Id         int           `json:"id"`
+//		 Name       string        `json:"name"`
+//		 UserDetail *UserDetail   `orm:"with:uid=id"`
+//		 UserScores []*UserScores `orm:"with:uid=id"`
+//	}
+//
 // We can enable model association operations on attribute `UserDetail` and `UserScores` by:
-//     db.With(User{}.UserDetail).With(User{}.UserDetail).Scan(xxx)
+//
+//	db.With(User{}.UserDetail).With(User{}.UserScores).Scan(xxx)
+//
 // Or:
-//     db.With(UserDetail{}).With(UserDetail{}).Scan(xxx)
+//
+//	db.With(UserDetail{}).With(UserScores{}).Scan(xxx)
+//
 // Or:
-//     db.With(UserDetail{}, UserDetail{}).Scan(xxx)
+//
+//	db.With(UserDetail{}, UserScores{}).Scan(xxx)
 func (m *Model) With(objects ...interface{}) *Model {
 	model := m.getModel()
 	for _, object := range objects {
@@ -61,6 +67,9 @@ func (m *Model) WithAll() *Model {
 
 // doWithScanStruct handles model association operations feature for single struct.
 func (m *Model) doWithScanStruct(pointer interface{}) error {
+	if len(m.withArray) == 0 && m.withAll == false {
+		return nil
+	}
 	var (
 		err                 error
 		allowedTypeStrArray = make([]string, 0)
@@ -136,15 +145,19 @@ func (m *Model) doWithScanStruct(pointer interface{}) error {
 			bindToReflectValue = bindToReflectValue.Addr()
 		}
 
-		// It automatically retrieves struct field names from current attribute struct/slice.
-		if structType, err := gstructs.StructType(field.Value); err != nil {
+		if structFields, err := gstructs.Fields(gstructs.FieldsInput{
+			Pointer:         field.Value,
+			RecursiveOption: gstructs.RecursiveOptionEmbeddedNoTag,
+		}); err != nil {
 			return err
 		} else {
-			fieldKeys = structType.FieldKeys()
+			fieldKeys = make([]string, len(structFields))
+			for i, field := range structFields {
+				fieldKeys[i] = field.Name()
+			}
 		}
-
 		// Recursively with feature checks.
-		model = m.db.With(field.Value)
+		model = m.db.With(field.Value).Hook(m.hookHandler)
 		if m.withAll {
 			model = model.WithAll()
 		} else {
@@ -156,7 +169,16 @@ func (m *Model) doWithScanStruct(pointer interface{}) error {
 		if parsedTagOutput.Order != "" {
 			model = model.Order(parsedTagOutput.Order)
 		}
-		err = model.Fields(fieldKeys).Where(relatedSourceName, relatedTargetValue).Scan(bindToReflectValue)
+		if parsedTagOutput.Unscoped == "true" {
+			model = model.Unscoped()
+		}
+		// With cache feature.
+		if m.cacheEnabled && m.cacheOption.Name == "" {
+			model = model.Cache(m.cacheOption)
+		}
+		err = model.Fields(fieldKeys).
+			Where(relatedSourceName, relatedTargetValue).
+			Scan(bindToReflectValue)
 		// It ignores sql.ErrNoRows in with feature.
 		if err != nil && err != sql.ErrNoRows {
 			return err
@@ -168,6 +190,9 @@ func (m *Model) doWithScanStruct(pointer interface{}) error {
 // doWithScanStructs handles model association operations feature for struct slice.
 // Also see doWithScanStruct.
 func (m *Model) doWithScanStructs(pointer interface{}) error {
+	if len(m.withArray) == 0 && m.withAll == false {
+		return nil
+	}
 	if v, ok := pointer.(reflect.Value); ok {
 		pointer = v.Interface()
 	}
@@ -242,16 +267,23 @@ func (m *Model) doWithScanStructs(pointer interface{}) error {
 				relatedTargetName, parsedTagOutput.With,
 			)
 		}
-
-		// It automatically retrieves struct field names from current attribute struct/slice.
-		if structType, err := gstructs.StructType(field.Value); err != nil {
+		// If related value is empty, it does nothing but just returns.
+		if gutil.IsEmpty(relatedTargetValue) {
+			return nil
+		}
+		if structFields, err := gstructs.Fields(gstructs.FieldsInput{
+			Pointer:         field.Value,
+			RecursiveOption: gstructs.RecursiveOptionEmbeddedNoTag,
+		}); err != nil {
 			return err
 		} else {
-			fieldKeys = structType.FieldKeys()
+			fieldKeys = make([]string, len(structFields))
+			for i, field := range structFields {
+				fieldKeys[i] = field.Name()
+			}
 		}
-
 		// Recursively with feature checks.
-		model = m.db.With(field.Value)
+		model = m.db.With(field.Value).Hook(m.hookHandler)
 		if m.withAll {
 			model = model.WithAll()
 		} else {
@@ -263,7 +295,13 @@ func (m *Model) doWithScanStructs(pointer interface{}) error {
 		if parsedTagOutput.Order != "" {
 			model = model.Order(parsedTagOutput.Order)
 		}
-
+		if parsedTagOutput.Unscoped == "true" {
+			model = model.Unscoped()
+		}
+		// With cache feature.
+		if m.cacheEnabled && m.cacheOption.Name == "" {
+			model = model.Cache(m.cacheOption)
+		}
 		err = model.Fields(fieldKeys).
 			Where(relatedSourceName, relatedTargetValue).
 			ScanList(pointer, fieldName, parsedTagOutput.With)
@@ -276,42 +314,31 @@ func (m *Model) doWithScanStructs(pointer interface{}) error {
 }
 
 type parseWithTagInFieldStructOutput struct {
-	With  string
-	Where string
-	Order string
+	With     string
+	Where    string
+	Order    string
+	Unscoped string
 }
 
 func (m *Model) parseWithTagInFieldStruct(field gstructs.Field) (output parseWithTagInFieldStructOutput) {
 	var (
-		match  []string
 		ormTag = field.Tag(OrmTagForStruct)
+		data   = make(map[string]string)
+		array  []string
+		key    string
 	)
-	// with tag.
-	match, _ = gregex.MatchString(
-		fmt.Sprintf(`%s\s*:\s*([^,]+),{0,1}`, OrmTagForWith),
-		ormTag,
-	)
-	if len(match) > 1 {
-		output.With = match[1]
+	for _, v := range gstr.SplitAndTrim(ormTag, ",") {
+		array = gstr.Split(v, ":")
+		if len(array) == 2 {
+			key = array[0]
+			data[key] = gstr.Trim(array[1])
+		} else {
+			data[key] += " " + gstr.Trim(v)
+		}
 	}
-	if len(match) > 2 {
-		output.Where = gstr.Trim(match[2])
-	}
-	// where string.
-	match, _ = gregex.MatchString(
-		fmt.Sprintf(`%s\s*:.+,\s*%s:\s*([^,]+),{0,1}`, OrmTagForWith, OrmTagForWithWhere),
-		ormTag,
-	)
-	if len(match) > 1 {
-		output.Where = gstr.Trim(match[1])
-	}
-	// order string.
-	match, _ = gregex.MatchString(
-		fmt.Sprintf(`%s\s*:.+,\s*%s:\s*([^,]+),{0,1}`, OrmTagForWith, OrmTagForWithOrder),
-		ormTag,
-	)
-	if len(match) > 1 {
-		output.Order = gstr.Trim(match[1])
-	}
+	output.With = data[OrmTagForWith]
+	output.Where = data[OrmTagForWithWhere]
+	output.Order = data[OrmTagForWithOrder]
+	output.Unscoped = data[OrmTagForWithUnscoped]
 	return
 }

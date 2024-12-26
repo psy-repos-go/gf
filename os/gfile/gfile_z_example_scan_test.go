@@ -15,8 +15,8 @@ import (
 func ExampleScanDir() {
 	// init
 	var (
-		fileName = "gflie_example.txt"
-		tempDir  = gfile.TempDir("gfile_example_scan_dir")
+		fileName = "gfile_example.txt"
+		tempDir  = gfile.Temp("gfile_example_scan_dir")
 		tempFile = gfile.Join(tempDir, fileName)
 
 		tempSubDir  = gfile.Join(tempDir, "sub_dir")
@@ -34,16 +34,16 @@ func ExampleScanDir() {
 	}
 
 	// Output:
-	// gflie_example.txt
+	// gfile_example.txt
 	// sub_dir
-	// gflie_example.txt
+	// gfile_example.txt
 }
 
 func ExampleScanDirFile() {
 	// init
 	var (
-		fileName = "gflie_example.txt"
-		tempDir  = gfile.TempDir("gfile_example_scan_dir_file")
+		fileName = "gfile_example.txt"
+		tempDir  = gfile.Temp("gfile_example_scan_dir_file")
 		tempFile = gfile.Join(tempDir, fileName)
 
 		tempSubDir  = gfile.Join(tempDir, "sub_dir")
@@ -61,15 +61,15 @@ func ExampleScanDirFile() {
 	}
 
 	// Output:
-	// gflie_example.txt
-	// gflie_example.txt
+	// gfile_example.txt
+	// gfile_example.txt
 }
 
 func ExampleScanDirFunc() {
 	// init
 	var (
-		fileName = "gflie_example.txt"
-		tempDir  = gfile.TempDir("gfile_example_scan_dir_func")
+		fileName = "gfile_example.txt"
+		tempDir  = gfile.Temp("gfile_example_scan_dir_func")
 		tempFile = gfile.Join(tempDir, fileName)
 
 		tempSubDir  = gfile.Join(tempDir, "sub_dir")
@@ -83,7 +83,7 @@ func ExampleScanDirFunc() {
 	// scans directory recursively
 	list, _ := gfile.ScanDirFunc(tempDir, "*", true, func(path string) string {
 		// ignores some files
-		if gfile.Basename(path) == "gflie_example.txt" {
+		if gfile.Basename(path) == "gfile_example.txt" {
 			return ""
 		}
 		return path
@@ -99,11 +99,11 @@ func ExampleScanDirFunc() {
 func ExampleScanDirFileFunc() {
 	// init
 	var (
-		fileName = "gflie_example.txt"
-		tempDir  = gfile.TempDir("gfile_example_scan_dir_file_func")
+		fileName = "gfile_example.txt"
+		tempDir  = gfile.Temp("gfile_example_scan_dir_file_func")
 		tempFile = gfile.Join(tempDir, fileName)
 
-		fileName1 = "gflie_example_ignores.txt"
+		fileName1 = "gfile_example_ignores.txt"
 		tempFile1 = gfile.Join(tempDir, fileName1)
 
 		tempSubDir  = gfile.Join(tempDir, "sub_dir")
@@ -118,7 +118,7 @@ func ExampleScanDirFileFunc() {
 	// scans directory recursively exclusive of directories
 	list, _ := gfile.ScanDirFileFunc(tempDir, "*.txt", true, func(path string) string {
 		// ignores some files
-		if gfile.Basename(path) == "gflie_example_ignores.txt" {
+		if gfile.Basename(path) == "gfile_example_ignores.txt" {
 			return ""
 		}
 		return path
@@ -128,6 +128,6 @@ func ExampleScanDirFileFunc() {
 	}
 
 	// Output:
-	// gflie_example.txt
-	// gflie_example.txt
+	// gfile_example.txt
+	// gfile_example.txt
 }

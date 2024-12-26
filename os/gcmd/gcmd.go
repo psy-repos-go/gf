@@ -18,15 +18,18 @@ import (
 )
 
 const (
-	CtxKeyParser    gctx.StrKey = `CtxKeyParser`
-	CtxKeyCommand   gctx.StrKey = `CtxKeyCommand`
-	CtxKeyArguments gctx.StrKey = `CtxKeyArguments`
+	CtxKeyParser         gctx.StrKey = `CtxKeyParser`
+	CtxKeyCommand        gctx.StrKey = `CtxKeyCommand`
+	CtxKeyArgumentsIndex gctx.StrKey = `CtxKeyArgumentsIndex`
 )
 
 const (
-	helpOptionName      = "help"
-	helpOptionNameShort = "h"
-	maxLineChars        = 120
+	helpOptionName        = "help"
+	helpOptionNameShort   = "h"
+	maxLineChars          = 120
+	tracingInstrumentName = "github.com/gogf/gf/v2/os/gcmd.Command"
+	tagNameName           = "name"
+	tagNameShort          = "short"
 )
 
 // Init does custom initialization.

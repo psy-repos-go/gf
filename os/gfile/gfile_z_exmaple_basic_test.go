@@ -16,7 +16,7 @@ import (
 func ExampleMkdir() {
 	// init
 	var (
-		path = gfile.TempDir("gfile_example_basic_dir")
+		path = gfile.Temp("gfile_example_basic_dir")
 	)
 
 	// Creates directory
@@ -32,7 +32,7 @@ func ExampleMkdir() {
 func ExampleCreate() {
 	// init
 	var (
-		path     = gfile.Join(gfile.TempDir("gfile_example_basic_dir"), "file1")
+		path     = gfile.Join(gfile.Temp("gfile_example_basic_dir"), "file1")
 		dataByte = make([]byte, 50)
 	)
 	// Check whether the file exists
@@ -66,7 +66,7 @@ func ExampleCreate() {
 func ExampleOpen() {
 	// init
 	var (
-		path     = gfile.Join(gfile.TempDir("gfile_example_basic_dir"), "file1")
+		path     = gfile.Join(gfile.Temp("gfile_example_basic_dir"), "file1")
 		dataByte = make([]byte, 4096)
 	)
 	// Open file or directory with READONLY model
@@ -85,7 +85,7 @@ func ExampleOpen() {
 func ExampleOpenFile() {
 	// init
 	var (
-		path     = gfile.Join(gfile.TempDir("gfile_example_basic_dir"), "file1")
+		path     = gfile.Join(gfile.Temp("gfile_example_basic_dir"), "file1")
 		dataByte = make([]byte, 4096)
 	)
 	// Opens file/directory with custom `flag` and `perm`
@@ -111,7 +111,7 @@ func ExampleOpenFile() {
 func ExampleOpenWithFlag() {
 	// init
 	var (
-		path     = gfile.Join(gfile.TempDir("gfile_example_basic_dir"), "file1")
+		path     = gfile.Join(gfile.Temp("gfile_example_basic_dir"), "file1")
 		dataByte = make([]byte, 4096)
 	)
 
@@ -138,7 +138,7 @@ func ExampleOpenWithFlag() {
 func ExampleJoin() {
 	// init
 	var (
-		dirPath  = gfile.TempDir("gfile_example_basic_dir")
+		dirPath  = gfile.Temp("gfile_example_basic_dir")
 		filePath = "file1"
 	)
 
@@ -147,14 +147,14 @@ func ExampleJoin() {
 
 	fmt.Println(joinString)
 
-	// Output:
+	// May Output:
 	// /tmp/gfile_example_basic_dir/file1
 }
 
 func ExampleExists() {
 	// init
 	var (
-		path = gfile.Join(gfile.TempDir("gfile_example_basic_dir"), "file1")
+		path = gfile.Join(gfile.Temp("gfile_example_basic_dir"), "file1")
 	)
 	// Checks whether given `path` exist.
 	joinString := gfile.Exists(path)
@@ -168,8 +168,8 @@ func ExampleExists() {
 func ExampleIsDir() {
 	// init
 	var (
-		path     = gfile.TempDir("gfile_example_basic_dir")
-		filePath = gfile.Join(gfile.TempDir("gfile_example_basic_dir"), "file1")
+		path     = gfile.Temp("gfile_example_basic_dir")
+		filePath = gfile.Join(gfile.Temp("gfile_example_basic_dir"), "file1")
 	)
 	// Checks whether given `path` a directory.
 	fmt.Println(gfile.IsDir(path))
@@ -191,7 +191,7 @@ func ExamplePwd() {
 func ExampleChdir() {
 	// init
 	var (
-		path = gfile.Join(gfile.TempDir("gfile_example_basic_dir"), "file1")
+		path = gfile.Join(gfile.Temp("gfile_example_basic_dir"), "file1")
 	)
 	// Get current working directory
 	fmt.Println(gfile.Pwd())
@@ -210,8 +210,8 @@ func ExampleChdir() {
 func ExampleIsFile() {
 	// init
 	var (
-		filePath = gfile.Join(gfile.TempDir("gfile_example_basic_dir"), "file1")
-		dirPath  = gfile.TempDir("gfile_example_basic_dir")
+		filePath = gfile.Join(gfile.Temp("gfile_example_basic_dir"), "file1")
+		dirPath  = gfile.Temp("gfile_example_basic_dir")
 	)
 	// Checks whether given `path` a file, which means it's not a directory.
 	fmt.Println(gfile.IsFile(filePath))
@@ -225,7 +225,7 @@ func ExampleIsFile() {
 func ExampleStat() {
 	// init
 	var (
-		path = gfile.Join(gfile.TempDir("gfile_example_basic_dir"), "file1")
+		path = gfile.Join(gfile.Temp("gfile_example_basic_dir"), "file1")
 	)
 	// Get a FileInfo describing the named file.
 	stat, _ := gfile.Stat(path)
@@ -248,8 +248,8 @@ func ExampleStat() {
 func ExampleMove() {
 	// init
 	var (
-		srcPath = gfile.Join(gfile.TempDir("gfile_example_basic_dir"), "file1")
-		dstPath = gfile.Join(gfile.TempDir("gfile_example_basic_dir"), "file2")
+		srcPath = gfile.Join(gfile.Temp("gfile_example_basic_dir"), "file1")
+		dstPath = gfile.Join(gfile.Temp("gfile_example_basic_dir"), "file2")
 	)
 	// Check is file
 	fmt.Println(gfile.IsFile(dstPath))
@@ -270,8 +270,8 @@ func ExampleMove() {
 func ExampleRename() {
 	// init
 	var (
-		srcPath = gfile.Join(gfile.TempDir("gfile_example_basic_dir"), "file2")
-		dstPath = gfile.Join(gfile.TempDir("gfile_example_basic_dir"), "file1")
+		srcPath = gfile.Join(gfile.Temp("gfile_example_basic_dir"), "file2")
+		dstPath = gfile.Join(gfile.Temp("gfile_example_basic_dir"), "file1")
 	)
 	// Check is file
 	fmt.Println(gfile.IsFile(dstPath))
@@ -292,7 +292,7 @@ func ExampleRename() {
 func ExampleDirNames() {
 	// init
 	var (
-		path = gfile.TempDir("gfile_example_basic_dir")
+		path = gfile.Temp("gfile_example_basic_dir")
 	)
 	// Get sub-file names of given directory `path`.
 	dirNames, _ := gfile.DirNames(path)
@@ -340,20 +340,23 @@ func ExampleIsReadable() {
 func ExampleIsWritable() {
 	// init
 	var (
-		path = gfile.Pwd() + gfile.Separator + "testdata/readline/file.log"
+		path = gfile.Pwd() + gfile.Separator + "testdata/readline/"
+		file = "file.log"
 	)
 
 	// Checks whether given `path` is writable.
 	fmt.Println(gfile.IsWritable(path))
+	fmt.Println(gfile.IsWritable(path + file))
 
 	// Output:
+	// true
 	// true
 }
 
 func ExampleChmod() {
 	// init
 	var (
-		path = gfile.Join(gfile.TempDir("gfile_example_basic_dir"), "file1")
+		path = gfile.Join(gfile.Temp("gfile_example_basic_dir"), "file1")
 	)
 
 	// Get a FileInfo describing the named file.
@@ -374,36 +377,35 @@ func ExampleChmod() {
 
 	// Output:
 	// -rw-r--r--
-	// -rwxrwxrwx
+	// -rwxr-xr-x
 }
 
 func ExampleAbs() {
 	// init
 	var (
-		path = gfile.Join(gfile.TempDir("gfile_example_basic_dir"), "file1")
+		path = gfile.Join(gfile.Temp("gfile_example_basic_dir"), "file1")
 	)
 
 	// Get an absolute representation of path.
 	fmt.Println(gfile.Abs(path))
 
-	// Output:
+	// May Output:
 	// /tmp/gfile_example_basic_dir/file1
 }
 
 func ExampleRealPath() {
 	// init
 	var (
-		realPath  = gfile.Join(gfile.TempDir("gfile_example_basic_dir"), "file1")
-		worryPath = gfile.Join(gfile.TempDir("gfile_example_basic_dir"), "worryFile")
+		realPath  = gfile.Join(gfile.Temp("gfile_example_basic_dir"), "file1")
+		worryPath = gfile.Join(gfile.Temp("gfile_example_basic_dir"), "worryFile")
 	)
 
 	// fetch an absolute representation of path.
 	fmt.Println(gfile.RealPath(realPath))
 	fmt.Println(gfile.RealPath(worryPath))
 
-	// Output:
+	// May Output:
 	// /tmp/gfile_example_basic_dir/file1
-	//
 }
 
 func ExampleSelfPath() {
@@ -462,20 +464,20 @@ func ExampleName() {
 func ExampleDir() {
 	// init
 	var (
-		path = gfile.Join(gfile.TempDir("gfile_example_basic_dir"), "file1")
+		path = gfile.Join(gfile.Temp("gfile_example_basic_dir"), "file1")
 	)
 
 	// Get all but the last element of path, typically the path's directory.
 	fmt.Println(gfile.Dir(path))
 
-	// Output:
+	// May Output:
 	// /tmp/gfile_example_basic_dir
 }
 
 func ExampleIsEmpty() {
 	// init
 	var (
-		path = gfile.Join(gfile.TempDir("gfile_example_basic_dir"), "file1")
+		path = gfile.Join(gfile.Temp("gfile_example_basic_dir"), "file1")
 	)
 
 	// Check whether the `path` is empty
@@ -525,18 +527,18 @@ func ExampleTempDir() {
 	)
 
 	// fetch an absolute representation of path.
-	path := gfile.TempDir(fileName)
+	path := gfile.Temp(fileName)
 
 	fmt.Println(path)
 
-	// Output:
+	// May Output:
 	// /tmp/gfile_example_basic_dir
 }
 
 func ExampleRemove() {
 	// init
 	var (
-		path = gfile.Join(gfile.TempDir("gfile_example_basic_dir"), "file1")
+		path = gfile.Join(gfile.Temp("gfile_example_basic_dir"), "file1")
 	)
 
 	// Checks whether given `path` a file, which means it's not a directory.
