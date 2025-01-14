@@ -11,6 +11,7 @@ import (
 
 	"github.com/gogf/gf/v2/internal/utils"
 	"github.com/gogf/gf/v2/os/gtime"
+	"github.com/gogf/gf/v2/util/gconv/internal/localinterface"
 )
 
 // Time converts `any` to time.Time.
@@ -45,13 +46,14 @@ func Duration(any interface{}) time.Duration {
 
 // GTime converts `any` to *gtime.Time.
 // The parameter `format` can be used to specify the format of `any`.
+// It returns the converted value that matched the first format of the formats slice.
 // If no `format` given, it converts `any` using gtime.NewFromTimeStamp if `any` is numeric,
 // or using gtime.StrToTime if `any` is string.
 func GTime(any interface{}, format ...string) *gtime.Time {
 	if any == nil {
 		return nil
 	}
-	if v, ok := any.(iGTime); ok {
+	if v, ok := any.(localinterface.IGTime); ok {
 		return v.GTime(format...)
 	}
 	// It's already this type.
@@ -72,8 +74,13 @@ func GTime(any interface{}, format ...string) *gtime.Time {
 	}
 	// Priority conversion using given format.
 	if len(format) > 0 {
-		t, _ := gtime.StrToTimeFormat(s, format[0])
-		return t
+		for _, item := range format {
+			t, err := gtime.StrToTimeFormat(s, item)
+			if t != nil && err == nil {
+				return t
+			}
+		}
+		return nil
 	}
 	if utils.IsNumeric(s) {
 		return gtime.NewFromTimeStamp(Int64(s))

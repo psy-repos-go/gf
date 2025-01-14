@@ -10,12 +10,18 @@ import (
 	"github.com/gogf/gf/v2/errors/gcode"
 	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/gogf/gf/v2/internal/httputil"
+	"github.com/gogf/gf/v2/text/gstr"
 )
+
+// SupportedMethods returns all supported HTTP methods.
+func SupportedMethods() []string {
+	return gstr.SplitAndTrim(supportedHttpMethods, ",")
+}
 
 // BuildParams builds the request string for the http client. The `params` can be type of:
 // string/[]byte/map/struct/*struct.
 //
-// The optional parameter `noUrlEncode` specifies whether ignore the url encoding for the data.
+// The optional parameter `noUrlEncode` specifies whether to ignore the url encoding for the data.
 func BuildParams(params interface{}, noUrlEncode ...bool) (encodedParamStr string) {
 	return httputil.BuildParams(params, noUrlEncode...)
 }
@@ -41,15 +47,14 @@ func niceCallFunc(f func()) {
 						panic(v)
 					} else {
 						panic(gerror.WrapCodeSkip(
-							gcode.CodeInternalError, 1, v, "exception recovered",
+							gcode.CodeInternalPanic, 1, v, "exception recovered",
 						))
 					}
 				} else {
 					panic(gerror.NewCodeSkipf(
-						gcode.CodeInternalError, 1, "exception recovered: %+v", exception,
+						gcode.CodeInternalPanic, 1, "exception recovered: %+v", exception,
 					))
 				}
-
 			}
 		}
 	}()

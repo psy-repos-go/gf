@@ -8,11 +8,11 @@ package gmap_test
 
 import (
 	"fmt"
-	"github.com/gogf/gf/v2/internal/json"
-	"github.com/gogf/gf/v2/util/gconv"
 
 	"github.com/gogf/gf/v2/container/gmap"
 	"github.com/gogf/gf/v2/frame/g"
+	"github.com/gogf/gf/v2/internal/json"
+	"github.com/gogf/gf/v2/util/gconv"
 )
 
 func ExampleStrAnyMap_Iterator() {
@@ -599,8 +599,12 @@ func ExampleStrAnyMap_String() {
 
 	fmt.Println(m.String())
 
+	var m1 *gmap.StrAnyMap = nil
+	fmt.Println(len(m1.String()))
+
 	// Output:
 	// {"k1":"v1"}
+	// 0
 }
 
 func ExampleStrAnyMap_MarshalJSON() {

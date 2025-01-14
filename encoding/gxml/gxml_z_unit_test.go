@@ -73,7 +73,7 @@ func Test_XmlToJson(t *testing.T) {
 			t.Errorf("dstXml to json error. %s", dstXml)
 		}
 
-		if bytes.Compare(srcJson, dstJson) != 0 {
+		if !bytes.Equal(srcJson, dstJson) {
 			t.Errorf("convert to json error. srcJson:%s, dstJson:%s", string(srcJson), string(dstJson))
 		}
 
@@ -112,7 +112,7 @@ func Test_Decode2(t *testing.T) {
 <?xml version="1.0" encoding="UTF-8"?><doc><username>johngcn</username><password1>123456</password1><password2>123456</password2></doc>
 `
 		m, err := gxml.Decode([]byte(content))
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(m["doc"].(map[string]interface{})["username"], "johngcn")
 		t.Assert(m["doc"].(map[string]interface{})["password1"], "123456")
 		t.Assert(m["doc"].(map[string]interface{})["password2"], "123456")
@@ -125,7 +125,7 @@ func Test_DecodeWitoutRoot(t *testing.T) {
 <?xml version="1.0" encoding="UTF-8"?><doc><username>johngcn</username><password1>123456</password1><password2>123456</password2></doc>
 `
 		m, err := gxml.DecodeWithoutRoot([]byte(content))
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(m["username"], "johngcn")
 		t.Assert(m["password1"], "123456")
 		t.Assert(m["password2"], "123456")
@@ -204,5 +204,30 @@ func TestErrCase(t *testing.T) {
 		if err == nil {
 			t.Errorf("unexpected value: nil")
 		}
+	})
+}
+
+func Test_Issue3716(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		var (
+			xml = `<Person><Bio>I am a software developer &amp; I love coding.</Bio><Email>john.doe@example.com</Email><Name>&lt;&gt;&amp;&apos;&quot;AAA</Name></Person>`
+			m   = map[string]interface{}{
+				"Person": map[string]interface{}{
+					"Name":  "<>&'\"AAA",
+					"Email": "john.doe@example.com",
+					"Bio":   "I am a software developer & I love coding.",
+				},
+			}
+		)
+		gxml.XMLEscapeChars(true)
+		defer gxml.XMLEscapeChars(false)
+
+		xb, err := gxml.Encode(m)
+		t.AssertNil(err)
+		t.Assert(string(xb), xml)
+
+		dm, err := gxml.Decode(xb)
+		t.AssertNil(err)
+		t.Assert(dm, m)
 	})
 }

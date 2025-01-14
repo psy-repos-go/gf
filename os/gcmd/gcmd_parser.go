@@ -21,9 +21,15 @@ import (
 	"github.com/gogf/gf/v2/text/gstr"
 )
 
+// ParserOption manages the parsing options.
+type ParserOption struct {
+	CaseSensitive bool // Marks options parsing in case-sensitive way.
+	Strict        bool // Whether stops parsing and returns error if invalid option passed.
+}
+
 // Parser for arguments.
 type Parser struct {
-	strict           bool              // Whether stops parsing and returns error if invalid option passed.
+	option           ParserOption      // Parse option.
 	parsedArgs       []string          // As name described.
 	parsedOptions    map[string]string // As name described.
 	passedOptions    map[string]bool   // User passed supported options, like: map[string]bool{"name,n":true}
@@ -47,7 +53,7 @@ func ParserFromCtx(ctx context.Context) *Parser {
 // the value item of `supportedOptions` indicates whether corresponding option name needs argument or not.
 //
 // The optional parameter `strict` specifies whether stops parsing and returns error if invalid option passed.
-func Parse(supportedOptions map[string]bool, strict ...bool) (*Parser, error) {
+func Parse(supportedOptions map[string]bool, option ...ParserOption) (*Parser, error) {
 	if supportedOptions == nil {
 		command.Init(os.Args...)
 		return &Parser{
@@ -55,7 +61,7 @@ func Parse(supportedOptions map[string]bool, strict ...bool) (*Parser, error) {
 			parsedOptions: GetOptAll(),
 		}, nil
 	}
-	return ParseArgs(os.Args, supportedOptions, strict...)
+	return ParseArgs(os.Args, supportedOptions, option...)
 }
 
 // ParseArgs creates and returns a new Parser with given arguments and supported options.
@@ -64,7 +70,7 @@ func Parse(supportedOptions map[string]bool, strict ...bool) (*Parser, error) {
 // the value item of `supportedOptions` indicates whether corresponding option name needs argument or not.
 //
 // The optional parameter `strict` specifies whether stops parsing and returns error if invalid option passed.
-func ParseArgs(args []string, supportedOptions map[string]bool, strict ...bool) (*Parser, error) {
+func ParseArgs(args []string, supportedOptions map[string]bool, option ...ParserOption) (*Parser, error) {
 	if supportedOptions == nil {
 		command.Init(args...)
 		return &Parser{
@@ -72,12 +78,12 @@ func ParseArgs(args []string, supportedOptions map[string]bool, strict ...bool) 
 			parsedOptions: GetOptAll(),
 		}, nil
 	}
-	strictParsing := false
-	if len(strict) > 0 {
-		strictParsing = strict[0]
+	var parserOption ParserOption
+	if len(option) > 0 {
+		parserOption = option[0]
 	}
 	parser := &Parser{
-		strict:           strictParsing,
+		option:           parserOption,
 		parsedArgs:       make([]string, 0),
 		parsedOptions:    make(map[string]string),
 		passedOptions:    supportedOptions,
@@ -118,7 +124,7 @@ func ParseArgs(args []string, supportedOptions map[string]bool, strict ...bool) 
 						}
 						i++
 						continue
-					} else if parser.strict {
+					} else if parser.option.Strict {
 						return nil, gerror.NewCodef(gcode.CodeInvalidParameter, `invalid option '%s'`, args[i])
 					}
 				}
@@ -159,8 +165,18 @@ func (p *Parser) parseOption(argument string) string {
 }
 
 func (p *Parser) isOptionValid(name string) bool {
-	_, ok := p.supportedOptions[name]
-	return ok
+	// Case-Sensitive.
+	if p.option.CaseSensitive {
+		_, ok := p.supportedOptions[name]
+		return ok
+	}
+	// Case-InSensitive.
+	for optionName := range p.supportedOptions {
+		if gstr.Equal(optionName, name) {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Parser) isOptionNeedArgument(name string) bool {
@@ -169,11 +185,24 @@ func (p *Parser) isOptionNeedArgument(name string) bool {
 
 // setOptionValue sets the option value for name and according alias.
 func (p *Parser) setOptionValue(name, value string) {
-	for optionName, _ := range p.passedOptions {
-		array := gstr.SplitAndTrim(optionName, ",")
-		for _, v := range array {
-			if strings.EqualFold(v, name) {
-				for _, v := range array {
+	// Accurate option name match.
+	for optionName := range p.passedOptions {
+		optionNameAndShort := gstr.SplitAndTrim(optionName, ",")
+		for _, optionNameItem := range optionNameAndShort {
+			if optionNameItem == name {
+				for _, v := range optionNameAndShort {
+					p.parsedOptions[v] = value
+				}
+				return
+			}
+		}
+	}
+	// Fuzzy option name match.
+	for optionName := range p.passedOptions {
+		optionNameAndShort := gstr.SplitAndTrim(optionName, ",")
+		for _, optionNameItem := range optionNameAndShort {
+			if strings.EqualFold(optionNameItem, name) {
+				for _, v := range optionNameAndShort {
 					p.parsedOptions[v] = value
 				}
 				return
@@ -184,6 +213,9 @@ func (p *Parser) setOptionValue(name, value string) {
 
 // GetOpt returns the option value named `name` as gvar.Var.
 func (p *Parser) GetOpt(name string, def ...interface{}) *gvar.Var {
+	if p == nil {
+		return nil
+	}
 	if v, ok := p.parsedOptions[name]; ok {
 		return gvar.New(v)
 	}
@@ -195,12 +227,18 @@ func (p *Parser) GetOpt(name string, def ...interface{}) *gvar.Var {
 
 // GetOptAll returns all parsed options.
 func (p *Parser) GetOptAll() map[string]string {
+	if p == nil {
+		return nil
+	}
 	return p.parsedOptions
 }
 
 // GetArg returns the argument at `index` as gvar.Var.
 func (p *Parser) GetArg(index int, def ...string) *gvar.Var {
-	if index < len(p.parsedArgs) {
+	if p == nil {
+		return nil
+	}
+	if index >= 0 && index < len(p.parsedArgs) {
 		return gvar.New(p.parsedArgs[index])
 	}
 	if len(def) > 0 {
@@ -211,11 +249,14 @@ func (p *Parser) GetArg(index int, def ...string) *gvar.Var {
 
 // GetArgAll returns all parsed arguments.
 func (p *Parser) GetArgAll() []string {
+	if p == nil {
+		return nil
+	}
 	return p.parsedArgs
 }
 
 // MarshalJSON implements the interface MarshalJSON for json.Marshal.
-func (p Parser) MarshalJSON() ([]byte, error) {
+func (p *Parser) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]interface{}{
 		"parsedArgs":       p.parsedArgs,
 		"parsedOptions":    p.parsedOptions,

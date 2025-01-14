@@ -11,6 +11,7 @@ import (
 
 	"github.com/gogf/gf/v2/container/garray"
 	"github.com/gogf/gf/v2/frame/g"
+	"github.com/gogf/gf/v2/internal/empty"
 	"github.com/gogf/gf/v2/internal/json"
 	"github.com/gogf/gf/v2/util/gconv"
 )
@@ -54,6 +55,14 @@ func ExampleNewIntArraySize() {
 	// [10 20 15] 3 5
 }
 
+func ExampleNewIntArrayRange() {
+	s := garray.NewIntArrayRange(1, 5, 1)
+	fmt.Println(s.Slice(), s.Len(), cap(s.Slice()))
+
+	// Output:
+	// [1 2 3 4 5] 5 8
+}
+
 func ExampleNewIntArrayFrom() {
 	s := garray.NewIntArrayFrom(g.SliceInt{10, 20, 15, 30})
 	fmt.Println(s.Slice(), s.Len(), cap(s.Slice()))
@@ -83,9 +92,12 @@ func ExampleIntArray_Get() {
 	s := garray.NewIntArrayFrom(g.SliceInt{10, 20, 15, 30})
 	sGet, sBool := s.Get(3)
 	fmt.Println(sGet, sBool)
+	sGet, sBool = s.Get(99)
+	fmt.Println(sGet, sBool)
 
 	// Output:
 	// 30 true
+	// 0 false
 }
 
 func ExampleIntArray_Set() {
@@ -686,6 +698,25 @@ func ExampleIntArray_UnmarshalValue() {
 
 	// Output:
 	// &{john [96,98,97]}
+}
+
+func ExampleIntArray_Filter() {
+	array1 := garray.NewIntArrayFrom(g.SliceInt{10, 40, 50, 0, 0, 0, 60})
+	array2 := garray.NewIntArrayFrom(g.SliceInt{10, 4, 51, 5, 45, 50, 56})
+	fmt.Println(array1.Filter(func(index int, value int) bool {
+		return empty.IsEmpty(value)
+	}))
+	fmt.Println(array2.Filter(func(index int, value int) bool {
+		return value%2 == 0
+	}))
+	fmt.Println(array2.Filter(func(index int, value int) bool {
+		return value%2 == 1
+	}))
+
+	// Output:
+	// [10,40,50,60]
+	// [51,5,45]
+	// []
 }
 
 func ExampleIntArray_FilterEmpty() {

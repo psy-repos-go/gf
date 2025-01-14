@@ -4,16 +4,18 @@
 // If a copy of the MIT was not distributed with this file,
 // You can obtain one at https://github.com/gogf/gf.
 
-// Package gvar provides an universal variable type, like generics.
+// Package gvar provides an universal variable type, like runtime generics.
 package gvar
 
 import (
 	"time"
 
 	"github.com/gogf/gf/v2/container/gtype"
+	"github.com/gogf/gf/v2/internal/deepcopy"
 	"github.com/gogf/gf/v2/internal/json"
 	"github.com/gogf/gf/v2/os/gtime"
 	"github.com/gogf/gf/v2/util/gconv"
+	"github.com/gogf/gf/v2/util/gutil"
 )
 
 // Var is an universal variable type implementer.
@@ -26,7 +28,7 @@ type Var struct {
 // The optional parameter `safe` specifies whether Var is used in concurrent-safety,
 // which is false in default.
 func New(value interface{}, safe ...bool) *Var {
-	if len(safe) > 0 && !safe[0] {
+	if len(safe) > 0 && safe[0] {
 		return &Var{
 			value: gtype.NewInterface(value),
 			safe:  true,
@@ -35,6 +37,11 @@ func New(value interface{}, safe ...bool) *Var {
 	return &Var{
 		value: value,
 	}
+}
+
+// Copy does a deep copy of current Var and returns a pointer to this Var.
+func (v *Var) Copy() *Var {
+	return New(gutil.Copy(v.Val()), v.safe)
 }
 
 // Clone does a shallow copy of current Var and returns a pointer to this Var.
@@ -187,4 +194,12 @@ func (v *Var) UnmarshalJSON(b []byte) error {
 func (v *Var) UnmarshalValue(value interface{}) error {
 	v.Set(value)
 	return nil
+}
+
+// DeepCopy implements interface for deep copy of current type.
+func (v *Var) DeepCopy() interface{} {
+	if v == nil {
+		return nil
+	}
+	return New(deepcopy.Copy(v.Val()), v.safe)
 }

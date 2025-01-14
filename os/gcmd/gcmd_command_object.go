@@ -9,26 +9,23 @@ package gcmd
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 
 	"github.com/gogf/gf/v2/container/gset"
+	"github.com/gogf/gf/v2/encoding/gjson"
 	"github.com/gogf/gf/v2/errors/gcode"
 	"github.com/gogf/gf/v2/errors/gerror"
+	"github.com/gogf/gf/v2/internal/intlog"
+	"github.com/gogf/gf/v2/internal/reflection"
 	"github.com/gogf/gf/v2/internal/utils"
 	"github.com/gogf/gf/v2/os/gstructs"
 	"github.com/gogf/gf/v2/text/gstr"
 	"github.com/gogf/gf/v2/util/gconv"
 	"github.com/gogf/gf/v2/util/gmeta"
+	"github.com/gogf/gf/v2/util/gtag"
 	"github.com/gogf/gf/v2/util/gutil"
 	"github.com/gogf/gf/v2/util/gvalid"
-)
-
-const (
-	tagNameDc   = `dc`
-	tagNameAd   = `ad`
-	tagNameEg   = `eg`
-	tagNameArg  = `arg`
-	tagNameRoot = `root`
 )
 
 var (
@@ -38,7 +35,14 @@ var (
 
 // NewFromObject creates and returns a root command object using given object.
 func NewFromObject(object interface{}) (rootCmd *Command, err error) {
-	originValueAndKind := utils.OriginValueAndKind(object)
+	switch c := object.(type) {
+	case Command:
+		return &c, nil
+	case *Command:
+		return c, nil
+	}
+
+	originValueAndKind := reflection.OriginValueAndKind(object)
 	if originValueAndKind.OriginKind != reflect.Struct {
 		err = gerror.Newf(
 			`input object should be type of struct, but got "%s"`,
@@ -57,14 +61,14 @@ func NewFromObject(object interface{}) (rootCmd *Command, err error) {
 	}
 
 	// Root command creating.
-	rootCmd, err = newCommandFromObjectMeta(object)
+	rootCmd, err = newCommandFromObjectMeta(object, "")
 	if err != nil {
 		return
 	}
 	// Sub command creating.
 	var (
 		nameSet         = gset.NewStrSet()
-		rootCommandName = gmeta.Get(object, tagNameRoot).String()
+		rootCommandName = gmeta.Get(object, gtag.Root).String()
 		subCommands     []*Command
 	)
 	if rootCommandName == "" {
@@ -72,17 +76,19 @@ func NewFromObject(object interface{}) (rootCmd *Command, err error) {
 	}
 	for i := 0; i < reflectValue.NumMethod(); i++ {
 		var (
-			method    = reflectValue.Method(i)
-			methodCmd *Command
+			method      = reflectValue.Type().Method(i)
+			methodValue = reflectValue.Method(i)
+			methodType  = methodValue.Type()
+			methodCmd   *Command
 		)
-		methodCmd, err = newCommandFromMethod(object, method)
+		methodCmd, err = newCommandFromMethod(object, method, methodValue, methodType)
 		if err != nil {
 			return
 		}
 		if nameSet.Contains(methodCmd.Name) {
 			err = gerror.Newf(
 				`command name should be unique, found duplicated command name in method "%s"`,
-				method.Type().String(),
+				methodType.String(),
 			)
 			return
 		}
@@ -131,107 +137,112 @@ func methodToRootCmdWhenNameEqual(rootCmd *Command, methodCmd *Command) {
 	}
 }
 
-func newCommandFromObjectMeta(object interface{}) (command *Command, err error) {
-	var (
-		metaData = gmeta.Data(object)
-	)
-	if len(metaData) == 0 {
-		err = gerror.Newf(
-			`no meta data found in struct "%s"`,
-			reflect.TypeOf(object).String(),
-		)
-		return
-	}
+// The `object` is the Meta attribute from business object, and the `name` is the command name,
+// commonly from method name, which is used when no name tag is defined in Meta.
+func newCommandFromObjectMeta(object interface{}, name string) (command *Command, err error) {
+	var metaData = gmeta.Data(object)
 	if err = gconv.Scan(metaData, &command); err != nil {
 		return
 	}
-	// Name filed is necessary.
+	// Name field is necessary.
 	if command.Name == "" {
-		err = gerror.Newf(
-			`command name cannot be empty, "name" tag not found in meta of struct "%s"`,
-			reflect.TypeOf(object).String(),
-		)
-		return
+		if name == "" {
+			err = gerror.Newf(
+				`command name cannot be empty, "name" tag not found in meta of struct "%s"`,
+				reflect.TypeOf(object).String(),
+			)
+			return
+		}
+		command.Name = name
+	}
+	if command.Brief == "" {
+		for _, tag := range []string{gtag.Summary, gtag.SummaryShort, gtag.SummaryShort2} {
+			command.Brief = metaData[tag]
+			if command.Brief != "" {
+				break
+			}
+		}
 	}
 	if command.Description == "" {
-		command.Description = metaData[tagNameDc]
+		command.Description = metaData[gtag.DescriptionShort]
+	}
+	if command.Brief == "" && command.Description != "" {
+		command.Brief = command.Description
+		command.Description = ""
 	}
 	if command.Examples == "" {
-		command.Examples = metaData[tagNameEg]
+		command.Examples = metaData[gtag.ExampleShort]
 	}
 	if command.Additional == "" {
-		command.Additional = metaData[tagNameAd]
+		command.Additional = metaData[gtag.AdditionalShort]
 	}
 	return
 }
 
-func newCommandFromMethod(object interface{}, method reflect.Value) (command *Command, err error) {
-	var (
-		reflectType = method.Type()
-	)
+func newCommandFromMethod(
+	object interface{}, method reflect.Method, methodValue reflect.Value, methodType reflect.Type,
+) (command *Command, err error) {
 	// Necessary validation for input/output parameters and naming.
-	if reflectType.NumIn() != 2 || reflectType.NumOut() != 2 {
-		if reflectType.PkgPath() != "" {
+	if methodType.NumIn() != 2 || methodType.NumOut() != 2 {
+		if methodType.PkgPath() != "" {
 			err = gerror.NewCodef(
 				gcode.CodeInvalidParameter,
 				`invalid command: %s.%s.%s defined as "%s", but "func(context.Context, Input)(Output, error)" is required`,
-				reflectType.PkgPath(), reflect.TypeOf(object).Name(), reflectType.Name(), reflectType.String(),
+				methodType.PkgPath(), reflect.TypeOf(object).Name(), method.Name, methodType.String(),
 			)
 		} else {
 			err = gerror.NewCodef(
 				gcode.CodeInvalidParameter,
-				`invalid command: defined as "%s", but "func(context.Context, Input)(Output, error)" is required`,
-				reflectType.String(),
+				`invalid command: %s.%s defined as "%s", but "func(context.Context, Input)(Output, error)" is required`,
+				reflect.TypeOf(object).Name(), method.Name, methodType.String(),
 			)
 		}
 		return
 	}
-	if reflectType.In(0).String() != "context.Context" {
+	if !methodType.In(0).Implements(reflect.TypeOf((*context.Context)(nil)).Elem()) {
 		err = gerror.NewCodef(
 			gcode.CodeInvalidParameter,
-			`invalid command: defined as "%s", but the first input parameter should be type of "context.Context"`,
-			reflectType.String(),
+			`invalid command: %s.%s defined as "%s", but the first input parameter should be type of "context.Context"`,
+			reflect.TypeOf(object).Name(), method.Name, methodType.String(),
 		)
 		return
 	}
-	if reflectType.Out(1).String() != "error" {
+	if !methodType.Out(1).Implements(reflect.TypeOf((*error)(nil)).Elem()) {
 		err = gerror.NewCodef(
 			gcode.CodeInvalidParameter,
-			`invalid command: defined as "%s", but the last output parameter should be type of "error"`,
-			reflectType.String(),
+			`invalid command: %s.%s defined as "%s", but the last output parameter should be type of "error"`,
+			reflect.TypeOf(object).Name(), method.Name, methodType.String(),
 		)
 		return
 	}
 	// The input struct should be named as `xxxInput`.
-	if !gstr.HasSuffix(reflectType.In(1).String(), `Input`) {
+	if !gstr.HasSuffix(methodType.In(1).String(), `Input`) {
 		err = gerror.NewCodef(
 			gcode.CodeInvalidParameter,
 			`invalid struct naming for input: defined as "%s", but it should be named with "Input" suffix like "xxxInput"`,
-			reflectType.In(1).String(),
+			methodType.In(1).String(),
 		)
 		return
 	}
 	// The output struct should be named as `xxxOutput`.
-	if !gstr.HasSuffix(reflectType.Out(0).String(), `Output`) {
+	if !gstr.HasSuffix(methodType.Out(0).String(), `Output`) {
 		err = gerror.NewCodef(
 			gcode.CodeInvalidParameter,
 			`invalid struct naming for output: defined as "%s", but it should be named with "Output" suffix like "xxxOutput"`,
-			reflectType.Out(0).String(),
+			methodType.Out(0).String(),
 		)
 		return
 	}
 
-	var (
-		inputObject reflect.Value
-	)
-	if method.Type().In(1).Kind() == reflect.Ptr {
-		inputObject = reflect.New(method.Type().In(1).Elem()).Elem()
+	var inputObject reflect.Value
+	if methodType.In(1).Kind() == reflect.Ptr {
+		inputObject = reflect.New(methodType.In(1).Elem()).Elem()
 	} else {
-		inputObject = reflect.New(method.Type().In(1)).Elem()
+		inputObject = reflect.New(methodType.In(1)).Elem()
 	}
 
 	// Command creating.
-	if command, err = newCommandFromObjectMeta(inputObject.Interface()); err != nil {
+	if command, err = newCommandFromObjectMeta(inputObject.Interface(), method.Name); err != nil {
 		return
 	}
 
@@ -239,6 +250,9 @@ func newCommandFromMethod(object interface{}, method reflect.Value) (command *Co
 	if command.Arguments, err = newArgumentsFromInput(inputObject.Interface()); err != nil {
 		return
 	}
+
+	// For input struct converting using priority tag.
+	var priorityTag = gstr.Join([]string{tagNameName, tagNameShort}, ",")
 
 	// =============================================================================================
 	// Create function that has value return.
@@ -248,9 +262,12 @@ func newCommandFromMethod(object interface{}, method reflect.Value) (command *Co
 		var (
 			data        = gconv.Map(parser.GetOptAll())
 			argIndex    = 0
-			arguments   = gconv.Strings(ctx.Value(CtxKeyArguments))
+			arguments   = parser.GetArgAll()
 			inputValues = []reflect.Value{reflect.ValueOf(ctx)}
 		)
+		if value := ctx.Value(CtxKeyArgumentsIndex); value != nil {
+			argIndex = value.(int)
+		}
 		if data == nil {
 			data = map[string]interface{}{}
 		}
@@ -264,8 +281,22 @@ func newCommandFromMethod(object interface{}, method reflect.Value) (command *Co
 				}
 			} else {
 				// Read argument from command line option name.
-				if arg.Orphan && parser.GetOpt(arg.Name) != nil {
-					data[arg.Name] = "true"
+				if arg.Orphan {
+					if orphanValue := parser.GetOpt(arg.Name); orphanValue != nil {
+						if orphanValue.String() == "" {
+							// Example: gf -f
+							data[arg.Name] = "true"
+							if arg.Short != "" {
+								data[arg.Short] = "true"
+							}
+						} else {
+							// Adapter with common user habits.
+							// Eg:
+							// `gf -f=0`: which parameter `f` is parsed as false
+							// `gf -f=1`: which parameter `f` is parsed as true
+							data[arg.Name] = orphanValue.Bool()
+						}
+					}
 				}
 			}
 		}
@@ -275,11 +306,17 @@ func newCommandFromMethod(object interface{}, method reflect.Value) (command *Co
 		}
 		// Construct input parameters.
 		if len(data) > 0 {
+			intlog.PrintFunc(ctx, func() string {
+				return fmt.Sprintf(`input command data map: %s`, gjson.MustEncode(data))
+			})
 			if inputObject.Kind() == reflect.Ptr {
-				err = gconv.Scan(data, inputObject.Interface())
+				err = gconv.StructTag(data, inputObject.Interface(), priorityTag)
 			} else {
-				err = gconv.Struct(data, inputObject.Addr().Interface())
+				err = gconv.StructTag(data, inputObject.Addr().Interface(), priorityTag)
 			}
+			intlog.PrintFunc(ctx, func() string {
+				return fmt.Sprintf(`input object assigned data: %s`, gjson.MustEncode(inputObject.Interface()))
+			})
 			if err != nil {
 				return
 			}
@@ -293,7 +330,7 @@ func newCommandFromMethod(object interface{}, method reflect.Value) (command *Co
 		inputValues = append(inputValues, inputObject)
 
 		// Call handler with dynamic created parameter values.
-		results := method.Call(inputValues)
+		results := methodValue.Call(inputValues)
 		out = results[0].Interface()
 		if !results[1].IsNil() {
 			if v, ok := results[1].Interface().(error); ok {
@@ -338,7 +375,13 @@ func newArgumentsFromInput(object interface{}) (args []Argument, err error) {
 				arg.Short, reflect.TypeOf(object).String(), field.Name(),
 			)
 		}
-		if v, ok := metaData[tagNameArg]; ok {
+		if arg.Brief == "" {
+			arg.Brief = field.TagDescription()
+		}
+		if arg.Default == "" {
+			arg.Default = field.TagDefault()
+		}
+		if v, ok := metaData[gtag.Arg]; ok {
 			arg.IsArg = gconv.Bool(v)
 		}
 		if nameSet.Contains(arg.Name) {
@@ -377,6 +420,19 @@ func mergeDefaultStructValue(data map[string]interface{}, pointer interface{}) e
 			foundValue interface{}
 		)
 		for _, field := range tagFields {
+			var (
+				nameValue  = field.Tag(tagNameName)
+				shortValue = field.Tag(tagNameShort)
+			)
+			// If it already has value, it then ignores the default value.
+			if value, ok := data[nameValue]; ok {
+				data[field.Name()] = value
+				continue
+			}
+			if value, ok := data[shortValue]; ok {
+				data[field.Name()] = value
+				continue
+			}
 			foundKey, foundValue = gutil.MapPossibleItemByKey(data, field.Name())
 			if foundKey == "" {
 				data[field.Name()] = field.TagValue

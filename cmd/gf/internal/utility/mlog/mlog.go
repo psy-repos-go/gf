@@ -1,9 +1,14 @@
+// Copyright GoFrame gf Author(https://goframe.org). All Rights Reserved.
+//
+// This Source Code Form is subject to the terms of the MIT License.
+// If a copy of the MIT was not distributed with this file,
+// You can obtain one at https://github.com/gogf/gf.
+
 package mlog
 
 import (
 	"context"
 
-	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/os/gcmd"
 	"github.com/gogf/gf/v2/os/genv"
 	"github.com/gogf/gf/v2/os/glog"
@@ -19,15 +24,19 @@ var (
 )
 
 func init() {
-	logger.SetStack(false)
 	if genv.Get(headerPrintEnvName).String() == "1" {
 		logger.SetHeaderPrint(true)
 	} else {
 		logger.SetHeaderPrint(false)
 	}
+
 	if gcmd.GetOpt("debug") != nil || gcmd.GetOpt("gf.debug") != nil {
+		logger.SetHeaderPrint(true)
+		logger.SetStackSkip(4)
+		logger.SetFlags(logger.GetFlags() | glog.F_FILE_LONG)
 		logger.SetDebug(true)
 	} else {
+		logger.SetStack(false)
 		logger.SetDebug(false)
 	}
 }
@@ -36,9 +45,9 @@ func init() {
 func SetHeaderPrint(enabled bool) {
 	logger.SetHeaderPrint(enabled)
 	if enabled {
-		genv.Set(headerPrintEnvName, "1")
+		_ = genv.Set(headerPrintEnvName, "1")
 	} else {
-		genv.Set(headerPrintEnvName, "0")
+		_ = genv.Set(headerPrintEnvName, "0")
 	}
 }
 
@@ -51,17 +60,17 @@ func Printf(format string, v ...interface{}) {
 }
 
 func Fatal(v ...interface{}) {
-	logger.Fatal(ctx, append(g.Slice{"ERROR:"}, v...)...)
+	logger.Fatal(ctx, v...)
 }
 
 func Fatalf(format string, v ...interface{}) {
-	logger.Fatalf(ctx, "ERROR: "+format, v...)
+	logger.Fatalf(ctx, format, v...)
 }
 
 func Debug(v ...interface{}) {
-	logger.Debug(ctx, append(g.Slice{"DEBUG:"}, v...)...)
+	logger.Debug(ctx, v...)
 }
 
 func Debugf(format string, v ...interface{}) {
-	logger.Debugf(ctx, "DEBUG: "+format, v...)
+	logger.Debugf(ctx, format, v...)
 }

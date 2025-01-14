@@ -8,7 +8,6 @@ package gtest
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/gogf/gf/v2/debug/gdebug"
 	"github.com/gogf/gf/v2/internal/empty"
+	"github.com/gogf/gf/v2/text/gstr"
 	"github.com/gogf/gf/v2/util/gconv"
 )
 
@@ -29,7 +29,7 @@ const (
 func C(t *testing.T, f func(t *T)) {
 	defer func() {
 		if err := recover(); err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n%s", err, gdebug.StackWithFilter([]string{pathFilterKey}))
+			_, _ = fmt.Fprintf(os.Stderr, "%v\n%s", err, gdebug.StackWithFilter([]string{pathFilterKey}))
 			t.Fail()
 		}
 	}()
@@ -221,6 +221,7 @@ func AssertLE(value, expect interface{}) {
 // The `expect` should be a slice,
 // but the `value` can be a slice or a basic type variable.
 // TODO map support.
+// TODO: gconv.Strings(0) is not [0]
 func AssertIN(value, expect interface{}) {
 	var (
 		passed     = true
@@ -242,6 +243,12 @@ func AssertIN(value, expect interface{}) {
 				break
 			}
 		}
+	case reflect.String:
+		var (
+			valueStr  = gconv.String(value)
+			expectStr = gconv.String(expect)
+		)
+		passed = gstr.Contains(expectStr, valueStr)
 	default:
 		panic(fmt.Sprintf(`[ASSERT] INVALID EXPECT VALUE TYPE: %v`, expectKind))
 	}
@@ -274,6 +281,12 @@ func AssertNI(value, expect interface{}) {
 				break
 			}
 		}
+	case reflect.String:
+		var (
+			valueStr  = gconv.String(value)
+			expectStr = gconv.String(expect)
+		)
+		passed = !gstr.Contains(expectStr, valueStr)
 	default:
 		panic(fmt.Sprintf(`[ASSERT] INVALID EXPECT VALUE TYPE: %v`, expectKind))
 	}
@@ -289,7 +302,10 @@ func Error(message ...interface{}) {
 
 // Fatal prints `message` to stderr and exit the process.
 func Fatal(message ...interface{}) {
-	fmt.Fprintf(os.Stderr, "[FATAL] %s\n%s", fmt.Sprint(message...), gdebug.StackWithFilter([]string{pathFilterKey}))
+	_, _ = fmt.Fprintf(
+		os.Stderr, "[FATAL] %s\n%s", fmt.Sprint(message...),
+		gdebug.StackWithFilter([]string{pathFilterKey}),
+	)
 	os.Exit(1)
 }
 
@@ -299,38 +315,44 @@ func compareMap(value, expect interface{}) error {
 		rvValue  = reflect.ValueOf(value)
 		rvExpect = reflect.ValueOf(expect)
 	)
-	if empty.IsNil(value) {
-		value = nil
+
+	if rvExpect.Kind() != reflect.Map {
+		return nil
 	}
-	if rvExpect.Kind() == reflect.Map {
-		if rvValue.Kind() == reflect.Map {
-			if rvExpect.Len() == rvValue.Len() {
-				// Turn two interface maps to the same type for comparison.
-				// Direct use of rvValue.MapIndex(key).Interface() will panic
-				// when the key types are inconsistent.
-				mValue := make(map[string]string)
-				mExpect := make(map[string]string)
-				ksValue := rvValue.MapKeys()
-				ksExpect := rvExpect.MapKeys()
-				for _, key := range ksValue {
-					mValue[gconv.String(key.Interface())] = gconv.String(rvValue.MapIndex(key).Interface())
-				}
-				for _, key := range ksExpect {
-					mExpect[gconv.String(key.Interface())] = gconv.String(rvExpect.MapIndex(key).Interface())
-				}
-				for k, v := range mExpect {
-					if v != mValue[k] {
-						return fmt.Errorf(`[ASSERT] EXPECT VALUE map["%v"]:%v == map["%v"]:%v`+
-							"\nGIVEN : %v\nEXPECT: %v", k, mValue[k], k, v, mValue, mExpect)
-					}
-				}
-			} else {
-				return fmt.Errorf(`[ASSERT] EXPECT MAP LENGTH %d == %d`, rvValue.Len(), rvExpect.Len())
-			}
-		} else {
-			return fmt.Errorf(`[ASSERT] EXPECT VALUE TO BE A MAP, BUT GIVEN "%s"`, rvValue.Kind())
+
+	if rvValue.Kind() != reflect.Map {
+		return fmt.Errorf(`[ASSERT] EXPECT VALUE TO BE A MAP, BUT GIVEN "%s"`, rvValue.Kind())
+	}
+
+	if rvExpect.Len() != rvValue.Len() {
+		return fmt.Errorf(`[ASSERT] EXPECT MAP LENGTH %d == %d`, rvValue.Len(), rvExpect.Len())
+	}
+
+	// Turn two interface maps to the same type for comparison.
+	// Direct use of rvValue.MapIndex(key).Interface() will panic
+	// when the key types are inconsistent.
+	var (
+		mValue   = make(map[string]string)
+		mExpect  = make(map[string]string)
+		ksValue  = rvValue.MapKeys()
+		ksExpect = rvExpect.MapKeys()
+	)
+
+	for _, key := range ksValue {
+		mValue[gconv.String(key.Interface())] = gconv.String(rvValue.MapIndex(key).Interface())
+	}
+
+	for _, key := range ksExpect {
+		mExpect[gconv.String(key.Interface())] = gconv.String(rvExpect.MapIndex(key).Interface())
+	}
+
+	for k, v := range mExpect {
+		if v != mValue[k] {
+			return fmt.Errorf(`[ASSERT] EXPECT VALUE map["%v"]:%v == map["%v"]:%v`+
+				"\nGIVEN : %v\nEXPECT: %v", k, mValue[k], k, v, mValue, mExpect)
 		}
 	}
+
 	return nil
 }
 
@@ -342,27 +364,27 @@ func AssertNil(value interface{}) {
 	if err, ok := value.(error); ok {
 		panic(fmt.Sprintf(`%+v`, err))
 	}
-	AssertNE(value, nil)
+	Assert(value, nil)
 }
 
-// TestDataPath retrieves and returns the testdata path of current package,
+// DataPath retrieves and returns the testdata path of current package,
 // which is used for unit testing cases only.
 // The optional parameter `names` specifies the sub-folders/sub-files,
 // which will be joined with current system separator and returned with the path.
-func TestDataPath(names ...string) string {
+func DataPath(names ...string) string {
 	_, path, _ := gdebug.CallerWithFilter([]string{pathFilterKey})
-	path = filepath.Dir(path) + string(filepath.Separator) + "testdata"
+	path = filepath.Join(filepath.Dir(path), "testdata")
 	for _, name := range names {
-		path += string(filepath.Separator) + name
+		path = filepath.Join(path, name)
 	}
-	return path
+	return filepath.FromSlash(path)
 }
 
-// TestDataContent retrieves and returns the file content for specified testdata path of current package
-func TestDataContent(names ...string) string {
-	path := TestDataPath(names...)
+// DataContent retrieves and returns the file content for specified testdata path of current package
+func DataContent(names ...string) string {
+	path := DataPath(names...)
 	if path != "" {
-		data, err := ioutil.ReadFile(path)
+		data, err := os.ReadFile(path)
 		if err == nil {
 			return string(data)
 		}

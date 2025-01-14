@@ -24,9 +24,18 @@ func Test_Interface(t *testing.T) {
 		t.AssertEQ(iClone.Set(t2), t1)
 		t.AssertEQ(iClone.Val().(Temp), t2)
 
-		// 空参测试
+		// empty param test
 		i1 := gtype.New()
 		t.AssertEQ(i1.Val(), nil)
+
+		i2 := gtype.New("gf")
+		t.AssertEQ(i2.String(), "gf")
+		copyVal := i2.DeepCopy()
+		i2.Set("goframe")
+		t.AssertNE(copyVal, iClone.Val())
+		i2 = nil
+		copyVal = i2.DeepCopy()
+		t.AssertNil(copyVal)
 	})
 }
 
@@ -42,7 +51,7 @@ func Test_Interface_JSON(t *testing.T) {
 
 		i2 := gtype.New()
 		err := json.UnmarshalUseNumber(b2, &i2)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(i2.Val(), s)
 	})
 }
@@ -58,7 +67,7 @@ func Test_Interface_UnmarshalValue(t *testing.T) {
 			"name": "john",
 			"var":  "123",
 		}, &v)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(v.Name, "john")
 		t.Assert(v.Var.Val(), "123")
 	})

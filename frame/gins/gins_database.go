@@ -13,17 +13,13 @@ import (
 	"github.com/gogf/gf/v2/database/gdb"
 	"github.com/gogf/gf/v2/errors/gcode"
 	"github.com/gogf/gf/v2/errors/gerror"
+	"github.com/gogf/gf/v2/internal/consts"
+	"github.com/gogf/gf/v2/internal/instance"
 	"github.com/gogf/gf/v2/internal/intlog"
 	"github.com/gogf/gf/v2/os/gcfg"
-	"github.com/gogf/gf/v2/text/gregex"
-	"github.com/gogf/gf/v2/text/gstr"
+	"github.com/gogf/gf/v2/os/glog"
 	"github.com/gogf/gf/v2/util/gconv"
 	"github.com/gogf/gf/v2/util/gutil"
-)
-
-const (
-	frameCoreComponentNameDatabase = "gf.core.component.database"
-	configNodeNameDatabase         = "database"
 )
 
 // Database returns an instance of database ORM object with specified configuration group name.
@@ -38,60 +34,39 @@ func Database(name ...string) gdb.DB {
 		group = name[0]
 	}
 	instanceKey := fmt.Sprintf("%s.%s", frameCoreComponentNameDatabase, group)
-	db := localInstances.GetOrSetFuncLock(instanceKey, func() interface{} {
+	db := instance.GetOrSetFuncLock(instanceKey, func() interface{} {
 		// It ignores returned error to avoid file no found error while it's not necessary.
 		var (
 			configMap     map[string]interface{}
-			configNodeKey = configNodeNameDatabase
+			configNodeKey = consts.ConfigNodeNameDatabase
 		)
 		// It firstly searches the configuration of the instance name.
 		if configData, _ := Config().Data(ctx); len(configData) > 0 {
-			if v, _ := gutil.MapPossibleItemByKey(configData, configNodeNameDatabase); v != "" {
+			if v, _ := gutil.MapPossibleItemByKey(configData, consts.ConfigNodeNameDatabase); v != "" {
 				configNodeKey = v
 			}
 		}
 		if v, _ := Config().Get(ctx, configNodeKey); !v.IsEmpty() {
 			configMap = v.Map()
 		}
+		// No configuration found, it formats and panics error.
 		if len(configMap) == 0 && !gdb.IsConfigured() {
 			// File configuration object checks.
-			var (
-				err            error
-				configFilePath string
-			)
+			var err error
 			if fileConfig, ok := Config().GetAdapter().(*gcfg.AdapterFile); ok {
-				if configFilePath, _ = fileConfig.GetFilePath(); configFilePath == "" {
-					var (
-						exampleFileName       = "config.example.toml"
-						exampleConfigFilePath string
-					)
-					if exampleConfigFilePath, _ = fileConfig.GetFilePath(exampleFileName); exampleConfigFilePath != "" {
-						err = gerror.NewCodef(
-							gcode.CodeMissingConfiguration,
-							`configuration file "%s" not found, but found "%s", did you miss renaming the example configuration file?`,
-							fileConfig.GetFileName(),
-							exampleFileName,
-						)
-					} else {
-						err = gerror.NewCodef(
-							gcode.CodeMissingConfiguration,
-							`configuration file "%s" not found, did you miss the configuration file or the misspell the configuration file name?`,
-							fileConfig.GetFileName(),
-						)
-					}
-					if err != nil {
-						panic(err)
-					}
+				if _, err = fileConfig.GetFilePath(); err != nil {
+					panic(gerror.WrapCode(gcode.CodeMissingConfiguration, err,
+						`configuration not found, did you miss the configuration file or misspell the configuration file name`,
+					))
 				}
 			}
 			// Panic if nothing found in Config object or in gdb configuration.
 			if len(configMap) == 0 && !gdb.IsConfigured() {
-				err = gerror.NewCodef(
+				panic(gerror.NewCodef(
 					gcode.CodeMissingConfiguration,
-					`database initialization failed: "%s" node not found, is configuration file or configuration node missing?`,
-					configNodeNameDatabase,
-				)
-				panic(err)
+					`database initialization failed: configuration missing for database node "%s"`,
+					consts.ConfigNodeNameDatabase,
+				))
 			}
 		}
 
@@ -116,7 +91,9 @@ func Database(name ...string) gdb.DB {
 			if len(cg) > 0 {
 				if gdb.GetConfig(group) == nil {
 					intlog.Printf(ctx, "add configuration for group: %s, %#v", g, cg)
-					gdb.SetConfigGroup(g, cg)
+					if err := gdb.SetConfigGroup(g, cg); err != nil {
+						panic(err)
+					}
 				} else {
 					intlog.Printf(ctx, "ignore configuration as it already exists for group: %s, %#v", g, cg)
 					intlog.Printf(ctx, "%s, %#v", g, cg)
@@ -130,13 +107,18 @@ func Database(name ...string) gdb.DB {
 			if node.Link != "" || node.Host != "" {
 				cg = append(cg, *node)
 			}
-
 			if len(cg) > 0 {
 				if gdb.GetConfig(group) == nil {
 					intlog.Printf(ctx, "add configuration for group: %s, %#v", gdb.DefaultGroupName, cg)
-					gdb.SetConfigGroup(gdb.DefaultGroupName, cg)
+					if err := gdb.SetConfigGroup(gdb.DefaultGroupName, cg); err != nil {
+						panic(err)
+					}
 				} else {
-					intlog.Printf(ctx, "ignore configuration as it already exists for group: %s, %#v", gdb.DefaultGroupName, cg)
+					intlog.Printf(
+						ctx,
+						"ignore configuration as it already exists for group: %s, %#v",
+						gdb.DefaultGroupName, cg,
+					)
 					intlog.Printf(ctx, "%s, %#v", gdb.DefaultGroupName, cg)
 				}
 			}
@@ -147,7 +129,7 @@ func Database(name ...string) gdb.DB {
 			// Initialize logger for ORM.
 			var (
 				loggerConfigMap map[string]interface{}
-				loggerNodeName  = fmt.Sprintf("%s.%s", configNodeKey, configNodeNameLogger)
+				loggerNodeName  = fmt.Sprintf("%s.%s", configNodeKey, consts.ConfigNodeNameLogger)
 			)
 			if v, _ := Config().Get(ctx, loggerNodeName); !v.IsEmpty() {
 				loggerConfigMap = v.Map()
@@ -158,8 +140,10 @@ func Database(name ...string) gdb.DB {
 				}
 			}
 			if len(loggerConfigMap) > 0 {
-				if err = db.GetLogger().SetConfigWithMap(loggerConfigMap); err != nil {
-					panic(err)
+				if logger, ok := db.GetLogger().(*glog.Logger); ok {
+					if err = logger.SetConfigWithMap(loggerConfigMap); err != nil {
+						panic(err)
+					}
 				}
 			}
 			return db
@@ -180,25 +164,16 @@ func parseDBConfigNode(value interface{}) *gdb.ConfigNode {
 	if !ok {
 		return nil
 	}
-	node := &gdb.ConfigNode{}
-	err := gconv.Struct(nodeMap, node)
+	var (
+		node = &gdb.ConfigNode{}
+		err  = gconv.Struct(nodeMap, node)
+	)
 	if err != nil {
 		panic(err)
 	}
-	// Be compatible with old version.
-	if _, v := gutil.MapPossibleItemByKey(nodeMap, "LinkInfo"); v != nil {
-		node.Link = gconv.String(v)
-	}
+	// Find possible `Link` configuration content.
 	if _, v := gutil.MapPossibleItemByKey(nodeMap, "Link"); v != nil {
 		node.Link = gconv.String(v)
-	}
-	// Parse link syntax.
-	if node.Link != "" && node.Type == "" {
-		match, _ := gregex.MatchString(`([a-z]+):(.+)`, node.Link)
-		if len(match) == 3 {
-			node.Type = gstr.Trim(match[1])
-			node.Link = gstr.Trim(match[2])
-		}
 	}
 	return node
 }

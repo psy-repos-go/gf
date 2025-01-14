@@ -2,54 +2,56 @@
 
 `gf` is a powerful CLI tool for building [GoFrame](https://goframe.org) application with convenience.
 
-
 ## 1. Install
 
-### 1). Manually Install
+## 1) PreCompiled Binary
 
-> You might need setting the goproxy to make through building.
-> Please make sure your Golang version > v1.15.
+You can also install `gf` tool using pre-built binaries: <https://github.com/gogf/gf/releases>
 
-1. Latest version
-    ```
-    go install -g github.com/gogf/gf/cmd/gf/v2
-    ```
+1. `Mac` & `Linux`
 
-2. Check installation
+   ```shell
+    wget -O gf https://github.com/gogf/gf/releases/latest/download/gf_$(go env GOOS)_$(go env GOARCH) && chmod +x gf && ./gf install -y && rm ./gf
    ```
-   gf -v
-   ```
-### 2). PreBuilt Binary
 
-You can also install `gf` tool using pre-built binaries: https://github.com/gogf/gf/releases
-
-After downloads, please use `gf_xxx_xxx install` command to install gf binary to system binary path.
-
-1. `Mac`
-    ```shell
-    wget -O gf https://github.com/gogf/gf/releases/download/v2.0.0-rc2/gf_darwin_amd64 && chmod +x gf && ./gf install
-    ```
    > If you're using `zsh`, you might need rename your alias by command `alias gf=gf` to resolve the conflicts between `gf` and `git fetch`.
 
-2. `Linux`
-    ```shell
-    wget -O gf https://github.com/gogf/gf/releases/download/v2.0.0-rc2/gf_linux_amd64 && chmod +x gf && ./gf install
-    ```
+2. `Windows`
+   Manually download, execute in command line it and then follow the instruction.
 
-3. `Windows`
+3. Database support
 
-   Manually download, execute it and then follow the instruction.
+   |     DB     | builtin support |                                                                             remarks                                                                              |
+   |:----------:|:---------------:|:----------------------------------------------------------------------------------------------------------------------------------------------------------------:|
+   |   mysql    |       yes       |                                                                                -                                                                                 |
+   |  mariadb   |       yes       |                                                                                -                                                                                 |
+   |    tidb    |       yes       |                                                                                -                                                                                 |
+   |   mssql    |       yes       |                                                                                -                                                                                 |
+   |   oracle   |       yes       |                                                                                -                                                                                 |
+   |   pgsql    |       yes       |                                                                                -                                                                                 |
+   |   sqlite   |       yes       |                                                                                -                                                                                 |
+   | sqlitecgo  |       no        | to support sqlite database on 32bit architecture systems, manually add package import to the [source codes](./internal/cmd/cmd_gen_dao.go) and do the building.  |
+   | clickhouse |       no        |                              manually add package import to the [source codes](./internal/cmd/cmd_gen_dao.go) and do the building.                               |
+   |     dm     |       no        |                              manually add package import to the [source codes](./internal/cmd/cmd_gen_dao.go) and do the building.                               |
 
-4. Database `sqlite` and `oracle` are not support in `gf gen` command in default as it needs `cgo` and `gcc`, you can manually make some changes to the source codes and do the building.
+## 2) Manually Install
+
+```shell
+go install github.com/gogf/gf/cmd/gf/v2@latest # latest version
+go install github.com/gogf/gf/cmd/gf/v2@v2.5.5 # certain version(should be >= v2.5.5)
+```
 
 ## 2. Commands
+
 ```html
 $ gf
 USAGE
     gf COMMAND [OPTION]
 
 COMMAND
+   up         upgrade GoFrame version/tool to latest one in current project
    env        show current Golang environment variables
+   fix        auto fixing codes after upgrading to new GoFrame version
    run        running go codes with hot-compiled-like feature
    gen        automatically generate go files for dao/do/entity/pb/pbentity
    tpl        template parsing and building commands
@@ -75,10 +77,3 @@ ADDITIONAL
 ### 1). Command `gf run` returns `pipe: too many open files`
 
 Please use `ulimit -n 65535` to enlarge your system configuration for max open files for current terminal shell session, and then `gf run`.
-
-
-
-
-
-
-

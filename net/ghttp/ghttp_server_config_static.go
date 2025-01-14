@@ -12,17 +12,16 @@ import (
 	"context"
 	"strings"
 
-	"github.com/gogf/gf/v2/os/gres"
-
 	"github.com/gogf/gf/v2/container/garray"
 	"github.com/gogf/gf/v2/os/gfile"
+	"github.com/gogf/gf/v2/os/gres"
 	"github.com/gogf/gf/v2/util/gconv"
 )
 
 // staticPathItem is the item struct for static path configuration.
 type staticPathItem struct {
-	prefix string // The router URI.
-	path   string // The static path.
+	Prefix string // The router URI.
+	Path   string // The static path.
 }
 
 // SetIndexFiles sets the index files for server.
@@ -30,7 +29,7 @@ func (s *Server) SetIndexFiles(indexFiles []string) {
 	s.config.IndexFiles = indexFiles
 }
 
-// GetIndexFiles retrieves and returns the index files from server.
+// GetIndexFiles retrieves and returns the index files from the server.
 func (s *Server) GetIndexFiles() []string {
 	return s.config.IndexFiles
 }
@@ -97,8 +96,8 @@ func (s *Server) AddStaticPath(prefix string, path string) {
 		}
 	}
 	addItem := staticPathItem{
-		prefix: prefix,
-		path:   realPath,
+		Prefix: prefix,
+		Path:   realPath,
 	}
 	if len(s.config.StaticPaths) > 0 {
 		s.config.StaticPaths = append(s.config.StaticPaths, addItem)
@@ -113,13 +112,13 @@ func (s *Server) AddStaticPath(prefix string, path string) {
 			return r
 		})
 		for _, v := range s.config.StaticPaths {
-			array.Add(v.prefix)
+			array.Add(v.Prefix)
 		}
 		// Add the items to paths by previous sorted slice.
 		paths := make([]staticPathItem, 0)
 		for _, v := range array.Slice() {
 			for _, item := range s.config.StaticPaths {
-				if strings.EqualFold(gconv.String(v), item.prefix) {
+				if strings.EqualFold(gconv.String(v), item.Prefix) {
 					paths = append(paths, item)
 					break
 				}

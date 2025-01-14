@@ -9,12 +9,13 @@ package ghttp
 import (
 	"github.com/gogf/gf/v2/container/gvar"
 	"github.com/gogf/gf/v2/internal/empty"
+	"github.com/gogf/gf/v2/net/goai"
 	"github.com/gogf/gf/v2/os/gstructs"
 	"github.com/gogf/gf/v2/util/gconv"
 	"github.com/gogf/gf/v2/util/gutil"
 )
 
-// GetRequest retrieves and returns the parameter named `key` passed from client and
+// GetRequest retrieves and returns the parameter named `key` passed from the client and
 // custom params as interface{}, no matter what HTTP method the client is using. The
 // parameter `def` specifies the default value if the `key` does not exist.
 //
@@ -24,10 +25,10 @@ import (
 // retrieved and overwrote in order of priority: router < query < body < form < custom.
 func (r *Request) GetRequest(key string, def ...interface{}) *gvar.Var {
 	value := r.GetParam(key)
-	if value == nil {
+	if value.IsNil() {
 		value = r.GetForm(key)
 	}
-	if value == nil {
+	if value.IsNil() {
 		r.parseBody()
 		if len(r.bodyMap) > 0 {
 			if v := r.bodyMap[key]; v != nil {
@@ -35,13 +36,13 @@ func (r *Request) GetRequest(key string, def ...interface{}) *gvar.Var {
 			}
 		}
 	}
-	if value == nil {
+	if value.IsNil() {
 		value = r.GetQuery(key)
 	}
-	if value == nil {
+	if value.IsNil() {
 		value = r.GetRouter(key)
 	}
-	if value != nil {
+	if !value.IsNil() {
 		return value
 	}
 	if len(def) > 0 {
@@ -50,8 +51,8 @@ func (r *Request) GetRequest(key string, def ...interface{}) *gvar.Var {
 	return nil
 }
 
-// GetRequestMap retrieves and returns all parameters passed from client and custom params
-// as map, no matter what HTTP method the client is using. The parameter `kvMap` specifies
+// GetRequestMap retrieves and returns all parameters passed from the client and custom params
+// as the map, no matter what HTTP method the client is using. The parameter `kvMap` specifies
 // the keys retrieving from client parameters, the associated values are the default values
 // if the client does not pass the according keys.
 //
@@ -66,14 +67,10 @@ func (r *Request) GetRequestMap(kvMap ...map[string]interface{}) map[string]inte
 	var (
 		ok, filter bool
 	)
-	var length int
 	if len(kvMap) > 0 && kvMap[0] != nil {
-		length = len(kvMap[0])
 		filter = true
-	} else {
-		length = len(r.routerMap) + len(r.queryMap) + len(r.formMap) + len(r.bodyMap) + len(r.paramsMap)
 	}
-	m := make(map[string]interface{}, length)
+	m := make(map[string]interface{})
 	for k, v := range r.routerMap {
 		if filter {
 			if _, ok = kvMap[0][k]; !ok {
@@ -114,6 +111,16 @@ func (r *Request) GetRequestMap(kvMap ...map[string]interface{}) map[string]inte
 		}
 		m[k] = v
 	}
+	// File uploading.
+	if r.MultipartForm != nil {
+		for name := range r.MultipartForm.File {
+			if uploadFiles := r.GetUploadFiles(name); len(uploadFiles) == 1 {
+				m[name] = uploadFiles[0]
+			} else {
+				m[name] = uploadFiles
+			}
+		}
+	}
 	// Check none exist parameters and assign it with default value.
 	if filter {
 		for k, v := range kvMap[0] {
@@ -125,7 +132,7 @@ func (r *Request) GetRequestMap(kvMap ...map[string]interface{}) map[string]inte
 	return m
 }
 
-// GetRequestMapStrStr retrieves and returns all parameters passed from client and custom
+// GetRequestMapStrStr retrieve and returns all parameters passed from the client and custom
 // params as map[string]string, no matter what HTTP method the client is using. The parameter
 // `kvMap` specifies the keys retrieving from client parameters, the associated values are the
 // default values if the client does not pass.
@@ -141,7 +148,7 @@ func (r *Request) GetRequestMapStrStr(kvMap ...map[string]interface{}) map[strin
 	return nil
 }
 
-// GetRequestMapStrVar retrieves and returns all parameters passed from client and custom
+// GetRequestMapStrVar retrieve and returns all parameters passed from the client and custom
 // params as map[string]*gvar.Var, no matter what HTTP method the client is using. The parameter
 // `kvMap` specifies the keys retrieving from client parameters, the associated values are the
 // default values if the client does not pass.
@@ -157,8 +164,8 @@ func (r *Request) GetRequestMapStrVar(kvMap ...map[string]interface{}) map[strin
 	return nil
 }
 
-// GetRequestStruct retrieves all parameters passed from client and custom params no matter
-// what HTTP method the client is using, and converts them to given struct object. Note that
+// GetRequestStruct retrieves all parameters passed from the client and custom params no matter
+// what HTTP method the client is using, and converts them to give the struct object. Note that
 // the parameter `pointer` is a pointer to the struct object.
 // The optional parameter `mapping` is used to specify the key to attribute mapping.
 func (r *Request) GetRequestStruct(pointer interface{}, mapping ...map[string]string) error {
@@ -171,14 +178,42 @@ func (r *Request) doGetRequestStruct(pointer interface{}, mapping ...map[string]
 	if data == nil {
 		data = map[string]interface{}{}
 	}
+	// Default struct values.
 	if err = r.mergeDefaultStructValue(data, pointer); err != nil {
 		return data, nil
 	}
+	// `in` Tag Struct values.
+	if err = r.mergeInTagStructValue(data, pointer); err != nil {
+		return data, nil
+	}
+
 	return data, gconv.Struct(data, pointer, mapping...)
 }
 
 // mergeDefaultStructValue merges the request parameters with default values from struct tag definition.
 func (r *Request) mergeDefaultStructValue(data map[string]interface{}, pointer interface{}) error {
+	fields := r.serveHandler.Handler.Info.ReqStructFields
+	if len(fields) > 0 {
+		var (
+			foundKey   string
+			foundValue interface{}
+		)
+		for _, field := range fields {
+			if tagValue := field.TagDefault(); tagValue != "" {
+				foundKey, foundValue = gutil.MapPossibleItemByKey(data, field.Name())
+				if foundKey == "" {
+					data[field.Name()] = tagValue
+				} else {
+					if empty.IsEmpty(foundValue) {
+						data[foundKey] = tagValue
+					}
+				}
+			}
+		}
+		return nil
+	}
+
+	// provide non strict routing
 	tagFields, err := gstructs.TagFields(pointer, defaultValueTags)
 	if err != nil {
 		return err
@@ -195,6 +230,62 @@ func (r *Request) mergeDefaultStructValue(data map[string]interface{}, pointer i
 			} else {
 				if empty.IsEmpty(foundValue) {
 					data[foundKey] = field.TagValue
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// mergeInTagStructValue merges the request parameters with header or cookie values from struct `in` tag definition.
+func (r *Request) mergeInTagStructValue(data map[string]interface{}, pointer interface{}) error {
+	fields := r.serveHandler.Handler.Info.ReqStructFields
+	if len(fields) > 0 {
+		var (
+			foundKey   string
+			foundValue interface{}
+			headerMap  = make(map[string]interface{})
+			cookieMap  = make(map[string]interface{})
+		)
+
+		for k, v := range r.Header {
+			if len(v) > 0 {
+				headerMap[k] = v[0]
+			}
+		}
+
+		for _, cookie := range r.Cookies() {
+			cookieMap[cookie.Name] = cookie.Value
+		}
+
+		for _, field := range fields {
+			if tagValue := field.TagIn(); tagValue != "" {
+				switch tagValue {
+				case goai.ParameterInHeader:
+					foundHeaderKey, foundHeaderValue := gutil.MapPossibleItemByKey(headerMap, field.TagPriorityName())
+					if foundHeaderKey != "" {
+						foundKey, foundValue = gutil.MapPossibleItemByKey(data, foundHeaderKey)
+						if foundKey == "" {
+							data[field.Name()] = foundHeaderValue
+						} else {
+							if empty.IsEmpty(foundValue) {
+								data[foundKey] = foundHeaderValue
+							}
+						}
+					}
+				case goai.ParameterInCookie:
+					foundCookieKey, foundCookieValue := gutil.MapPossibleItemByKey(cookieMap, field.TagPriorityName())
+					if foundCookieKey != "" {
+						foundKey, foundValue = gutil.MapPossibleItemByKey(data, foundCookieKey)
+						if foundKey == "" {
+							data[field.Name()] = foundCookieValue
+						} else {
+							if empty.IsEmpty(foundValue) {
+								data[foundKey] = foundCookieValue
+							}
+						}
+					}
 				}
 			}
 		}

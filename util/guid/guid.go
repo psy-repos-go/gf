@@ -4,6 +4,7 @@
 // If a copy of the MIT was not distributed with this file,
 // You can obtain one at https://github.com/gogf/gf.
 
+// Package guid provides simple and high performance unique id generation functionality.
 package guid
 
 import (
@@ -13,6 +14,8 @@ import (
 
 	"github.com/gogf/gf/v2/container/gtype"
 	"github.com/gogf/gf/v2/encoding/ghash"
+	"github.com/gogf/gf/v2/errors/gcode"
+	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/gogf/gf/v2/net/gipv4"
 	"github.com/gogf/gf/v2/util/grand"
 )
@@ -23,14 +26,14 @@ const (
 )
 
 var (
-	sequence     gtype.Uint32 // Sequence for unique purpose of current process.
-	macAddrStr   = "0000000"  // MAC addresses hash result in 7 bytes.
+	sequence     gtype.Uint32 // Sequence for unique purpose of the current process.
+	macAddrStr   = "0000000"  // Hash result of MAC addresses in 7 bytes.
 	processIdStr = "0000"     // Process id in 4 bytes.
 )
 
 // init initializes several fixed local variable.
 func init() {
-	// MAC addresses hash result in 7 bytes.
+	// Hash result of MAC addresses in 7 bytes.
 	macs, _ := gipv4.GetMacArray()
 	if len(macs) > 0 {
 		var macAddrBytes []byte
@@ -38,7 +41,7 @@ func init() {
 			macAddrBytes = append(macAddrBytes, []byte(mac)...)
 		}
 		b := []byte{'0', '0', '0', '0', '0', '0', '0'}
-		s := strconv.FormatUint(uint64(ghash.DJB(macAddrBytes)), 36)
+		s := strconv.FormatUint(uint64(ghash.SDBM(macAddrBytes)), 36)
 		copy(b, s)
 		macAddrStr = string(b)
 	}
@@ -61,13 +64,13 @@ func init() {
 // be token by random string.
 //
 // The returned string is composed with:
-// 1. Default:    MAC(7) + PID(4) + TimestampNano(12) + Sequence(3) + RandomString(6)
-// 2. CustomData: Data(7/14) + TimestampNano(12) + Sequence(3) + RandomString(3/10)
+// 1. Default:    MACHash(7) + PID(4) + TimestampNano(12) + Sequence(3) + RandomString(6)
+// 2. CustomData: DataHash(7/14) + TimestampNano(12) + Sequence(3) + RandomString(3/10)
 //
 // Note that：
-// 1. The returned length is fixed to 32 bytes for performance purpose.
-// 2. The custom parameter `data` composed should have unique attribute in your
-//    business situation.
+//  1. The returned length is fixed to 32 bytes for performance purpose.
+//  2. The custom parameter `data` composed should have unique attribute in your
+//     business scenario.
 func S(data ...[]byte) string {
 	var (
 		b       = make([]byte, 32)
@@ -92,7 +95,10 @@ func S(data ...[]byte) string {
 		copy(b[n+12:], getSequence())
 		copy(b[n+12+3:], getRandomStr(32-n-12-3))
 	} else {
-		panic("too many data parts, it should be no more than 2 parts")
+		panic(gerror.NewCode(
+			gcode.CodeInvalidParameter,
+			"too many data parts, it should be no more than 2 parts",
+		))
 	}
 	return string(b)
 }
@@ -124,7 +130,7 @@ func getRandomStr(n int) []byte {
 // getDataHashStr creates and returns hash bytes in 7 bytes with given data bytes.
 func getDataHashStr(data []byte) []byte {
 	b := []byte{'0', '0', '0', '0', '0', '0', '0'}
-	s := strconv.FormatUint(uint64(ghash.DJB(data)), 36)
+	s := strconv.FormatUint(uint64(ghash.SDBM(data)), 36)
 	copy(b, s)
 	return b
 }

@@ -10,7 +10,10 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/gogf/gf/v2/internal/json"
+	"github.com/gogf/gf/v2/internal/reflection"
 	"github.com/gogf/gf/v2/internal/utils"
+	"github.com/gogf/gf/v2/util/gconv/internal/localinterface"
 )
 
 // SliceUint is alias of Uints.
@@ -75,9 +78,13 @@ func Uints(any interface{}) []uint {
 	case []uint:
 		array = value
 	case []uint8:
-		array = make([]uint, len(value))
-		for k, v := range value {
-			array[k] = uint(v)
+		if json.Valid(value) {
+			_ = json.UnmarshalUseNumber(value, &array)
+		} else {
+			array = make([]uint, len(value))
+			for k, v := range value {
+				array[k] = uint(v)
+			}
 		}
 	case []uint16:
 		array = make([]uint, len(value))
@@ -130,10 +137,10 @@ func Uints(any interface{}) []uint {
 	}
 
 	// Default handler.
-	if v, ok := any.(iUints); ok {
+	if v, ok := any.(localinterface.IUints); ok {
 		return v.Uints()
 	}
-	if v, ok := any.(iInterfaces); ok {
+	if v, ok := any.(localinterface.IInterfaces); ok {
 		return Uints(v.Interfaces())
 	}
 	// JSON format string value converting.
@@ -141,7 +148,7 @@ func Uints(any interface{}) []uint {
 		return array
 	}
 	// Not a common type, it then uses reflection for conversion.
-	originValueAndKind := utils.OriginValueAndKind(any)
+	originValueAndKind := reflection.OriginValueAndKind(any)
 	switch originValueAndKind.OriginKind {
 	case reflect.Slice, reflect.Array:
 		var (
@@ -209,9 +216,13 @@ func Uint32s(any interface{}) []uint32 {
 			array[k] = uint32(v)
 		}
 	case []uint8:
-		array = make([]uint32, len(value))
-		for k, v := range value {
-			array[k] = uint32(v)
+		if json.Valid(value) {
+			_ = json.UnmarshalUseNumber(value, &array)
+		} else {
+			array = make([]uint32, len(value))
+			for k, v := range value {
+				array[k] = uint32(v)
+			}
 		}
 	case []uint16:
 		array = make([]uint32, len(value))
@@ -260,10 +271,10 @@ func Uint32s(any interface{}) []uint32 {
 	}
 
 	// Default handler.
-	if v, ok := any.(iUints); ok {
+	if v, ok := any.(localinterface.IUints); ok {
 		return Uint32s(v.Uints())
 	}
-	if v, ok := any.(iInterfaces); ok {
+	if v, ok := any.(localinterface.IInterfaces); ok {
 		return Uint32s(v.Interfaces())
 	}
 	// JSON format string value converting.
@@ -271,7 +282,7 @@ func Uint32s(any interface{}) []uint32 {
 		return array
 	}
 	// Not a common type, it then uses reflection for conversion.
-	originValueAndKind := utils.OriginValueAndKind(any)
+	originValueAndKind := reflection.OriginValueAndKind(any)
 	switch originValueAndKind.OriginKind {
 	case reflect.Slice, reflect.Array:
 		var (
@@ -340,9 +351,13 @@ func Uint64s(any interface{}) []uint64 {
 			array[k] = uint64(v)
 		}
 	case []uint8:
-		array = make([]uint64, len(value))
-		for k, v := range value {
-			array[k] = uint64(v)
+		if json.Valid(value) {
+			_ = json.UnmarshalUseNumber(value, &array)
+		} else {
+			array = make([]uint64, len(value))
+			for k, v := range value {
+				array[k] = uint64(v)
+			}
 		}
 	case []uint16:
 		array = make([]uint64, len(value))
@@ -390,10 +405,10 @@ func Uint64s(any interface{}) []uint64 {
 		return array
 	}
 	// Default handler.
-	if v, ok := any.(iUints); ok {
+	if v, ok := any.(localinterface.IUints); ok {
 		return Uint64s(v.Uints())
 	}
-	if v, ok := any.(iInterfaces); ok {
+	if v, ok := any.(localinterface.IInterfaces); ok {
 		return Uint64s(v.Interfaces())
 	}
 	// JSON format string value converting.
@@ -401,7 +416,7 @@ func Uint64s(any interface{}) []uint64 {
 		return array
 	}
 	// Not a common type, it then uses reflection for conversion.
-	originValueAndKind := utils.OriginValueAndKind(any)
+	originValueAndKind := reflection.OriginValueAndKind(any)
 	switch originValueAndKind.OriginKind {
 	case reflect.Slice, reflect.Array:
 		var (

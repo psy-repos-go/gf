@@ -17,6 +17,7 @@ import (
 	"github.com/gogf/gf/v2/util/gconv"
 )
 
+// StrSet is consisted of string items.
 type StrSet struct {
 	mu   rwmutex.RWMutex
 	data map[string]struct{}
@@ -47,9 +48,7 @@ func NewStrSetFrom(items []string, safe ...bool) *StrSet {
 // Iterator iterates the set readonly with given callback function `f`,
 // if `f` returns true then continue iterating; or false to stop.
 func (set *StrSet) Iterator(f func(v string) bool) {
-	set.mu.RLock()
-	defer set.mu.RUnlock()
-	for k, _ := range set.data {
+	for _, k := range set.Slice() {
 		if !f(k) {
 			break
 		}
@@ -69,7 +68,7 @@ func (set *StrSet) Add(item ...string) {
 }
 
 // AddIfNotExist checks whether item exists in the set,
-// it adds the item to set and returns true if it does not exists in the set,
+// it adds the item to set and returns true if it does not exist in the set,
 // or else it does nothing and returns false.
 func (set *StrSet) AddIfNotExist(item string) bool {
 	if !set.Contains(item) {
@@ -146,7 +145,7 @@ func (set *StrSet) Contains(item string) bool {
 func (set *StrSet) ContainsI(item string) bool {
 	set.mu.RLock()
 	defer set.mu.RUnlock()
-	for k, _ := range set.data {
+	for k := range set.data {
 		if strings.EqualFold(k, item) {
 			return true
 		}
@@ -178,7 +177,7 @@ func (set *StrSet) Clear() {
 	set.mu.Unlock()
 }
 
-// Slice returns the a of items of the set as slice.
+// Slice returns the an of items of the set as slice.
 func (set *StrSet) Slice() []string {
 	set.mu.RLock()
 	var (
@@ -206,7 +205,7 @@ func (set *StrSet) Join(glue string) string {
 		i      = 0
 		buffer = bytes.NewBuffer(nil)
 	)
-	for k, _ := range set.data {
+	for k := range set.data {
 		buffer.WriteString(k)
 		if i != l-1 {
 			buffer.WriteString(glue)
@@ -218,6 +217,9 @@ func (set *StrSet) Join(glue string) string {
 
 // String returns items as a string, which implements like json.Marshal does.
 func (set *StrSet) String() string {
+	if set == nil {
+		return ""
+	}
 	set.mu.RLock()
 	defer set.mu.RUnlock()
 	var (
@@ -225,13 +227,15 @@ func (set *StrSet) String() string {
 		i      = 0
 		buffer = bytes.NewBuffer(nil)
 	)
-	for k, _ := range set.data {
+	buffer.WriteByte('[')
+	for k := range set.data {
 		buffer.WriteString(`"` + gstr.QuoteMeta(k, `"\`) + `"`)
 		if i != l-1 {
 			buffer.WriteByte(',')
 		}
 		i++
 	}
+	buffer.WriteByte(']')
 	return buffer.String()
 }
 
@@ -400,7 +404,7 @@ func (set *StrSet) Merge(others ...*StrSet) *StrSet {
 func (set *StrSet) Sum() (sum int) {
 	set.mu.RLock()
 	defer set.mu.RUnlock()
-	for k, _ := range set.data {
+	for k := range set.data {
 		sum += gconv.Int(k)
 	}
 	return
@@ -410,7 +414,7 @@ func (set *StrSet) Sum() (sum int) {
 func (set *StrSet) Pop() string {
 	set.mu.Lock()
 	defer set.mu.Unlock()
-	for k, _ := range set.data {
+	for k := range set.data {
 		delete(set.data, k)
 		return k
 	}
@@ -430,7 +434,7 @@ func (set *StrSet) Pops(size int) []string {
 	}
 	index := 0
 	array := make([]string, size)
-	for k, _ := range set.data {
+	for k := range set.data {
 		delete(set.data, k)
 		array[index] = k
 		index++
@@ -493,4 +497,22 @@ func (set *StrSet) UnmarshalValue(value interface{}) (err error) {
 		set.data[v] = struct{}{}
 	}
 	return
+}
+
+// DeepCopy implements interface for deep copy of current type.
+func (set *StrSet) DeepCopy() interface{} {
+	if set == nil {
+		return nil
+	}
+	set.mu.RLock()
+	defer set.mu.RUnlock()
+	var (
+		slice = make([]string, len(set.data))
+		index = 0
+	)
+	for k := range set.data {
+		slice[index] = k
+		index++
+	}
+	return NewStrSetFrom(slice, set.mu.IsSafe())
 }

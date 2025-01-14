@@ -12,8 +12,38 @@ import (
 	"testing"
 
 	"github.com/gogf/gf/v2/os/gcfg"
+	"github.com/gogf/gf/v2/os/gfile"
 	"github.com/gogf/gf/v2/test/gtest"
 )
+
+func TestAdapterFile_Dump(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		c, err := gcfg.NewAdapterFile("config.yml")
+		t.AssertNil(err)
+
+		t.Assert(c.GetFileName(), "config.yml")
+
+		c.Dump()
+		c.Data(ctx)
+	})
+
+	gtest.C(t, func(t *gtest.T) {
+		c, err := gcfg.NewAdapterFile("testdata/default/config.toml")
+		t.AssertNil(err)
+
+		c.Dump()
+		c.Data(ctx)
+		c.GetPaths()
+	})
+
+}
+func TestAdapterFile_Available(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		c, err := gcfg.NewAdapterFile("testdata/default/config.toml")
+		t.AssertNil(err)
+		c.Available(ctx)
+	})
+}
 
 func TestAdapterFile_SetPath(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
@@ -21,6 +51,15 @@ func TestAdapterFile_SetPath(t *testing.T) {
 		t.AssertNil(err)
 
 		err = c.SetPath("/tmp")
+		t.AssertNil(err)
+
+		err = c.SetPath("notexist")
+		t.AssertNE(err, nil)
+
+		err = c.SetPath("testdata/c1.toml")
+		t.AssertNE(err, nil)
+
+		err = c.SetPath("")
 		t.AssertNil(err)
 
 		err = c.SetPath("gcfg.go")
@@ -38,6 +77,15 @@ func TestAdapterFile_AddPath(t *testing.T) {
 		t.AssertNil(err)
 
 		err = c.AddPath("/tmp")
+		t.AssertNil(err)
+
+		err = c.AddPath("notexist")
+		t.AssertNE(err, nil)
+
+		err = c.SetPath("testdata/c1.toml")
+		t.AssertNE(err, nil)
+
+		err = c.SetPath("")
 		t.AssertNil(err)
 
 		err = c.AddPath("gcfg.go")
@@ -97,5 +145,24 @@ func TestAdapterFile_With_UTF8_BOM(t *testing.T) {
 		c.SetFileName("cfg-with-utf8-bom.toml")
 		t.Assert(c.MustGet(ctx, "test.testInt"), 1)
 		t.Assert(c.MustGet(ctx, "test.testStr"), "test")
+	})
+}
+
+func TestAdapterFile_Set(t *testing.T) {
+	config := `log-path = "logs"`
+	gtest.C(t, func(t *gtest.T) {
+		var (
+			path = gcfg.DefaultConfigFileName
+			err  = gfile.PutContents(path, config)
+		)
+		t.AssertNil(err)
+		defer gfile.Remove(path)
+
+		c, err := gcfg.New()
+		t.Assert(c.MustGet(ctx, "log-path").String(), "logs")
+
+		err = c.GetAdapter().(*gcfg.AdapterFile).Set("log-path", "custom-logs")
+		t.AssertNil(err)
+		t.Assert(c.MustGet(ctx, "log-path").String(), "custom-logs")
 	})
 }

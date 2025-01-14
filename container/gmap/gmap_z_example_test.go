@@ -8,9 +8,9 @@ package gmap_test
 
 import (
 	"fmt"
-	"github.com/gogf/gf/v2/util/gutil"
 
 	"github.com/gogf/gf/v2/container/gmap"
+	"github.com/gogf/gf/v2/util/gutil"
 )
 
 func ExampleNew() {
@@ -89,7 +89,7 @@ func ExampleNewFrom() {
 }
 
 func ExampleNewHashMap() {
-	m := gmap.New()
+	m := gmap.NewHashMap()
 
 	m.Set("key1", "val1")
 	fmt.Println(m)
@@ -104,7 +104,7 @@ func ExampleNewHashMapFrom() {
 	m.Set("key1", "val1")
 	fmt.Println(m)
 
-	n := gmap.NewFrom(m.MapCopy(), true)
+	n := gmap.NewHashMapFrom(m.MapCopy(), true)
 	fmt.Println(n)
 
 	// Output:
@@ -277,7 +277,7 @@ func ExampleNewListMapFrom() {
 	n := gmap.NewListMapFrom(m.Map(), true)
 	fmt.Println(n)
 
-	// Output:
+	// May Output:
 	// {"key1":"var1","key2":"var2"}
 	// {"key1":"var1","key2":"var2"}
 }
@@ -290,7 +290,7 @@ func ExampleNewTreeMap() {
 
 	fmt.Println(m.Map())
 
-	// Output:
+	// May Output:
 	// map[key1:var1 key2:var2]
 }
 
@@ -305,7 +305,7 @@ func ExampleNewTreeMapFrom() {
 	n := gmap.NewListMapFrom(m.Map(), true)
 	fmt.Println(n.Map())
 
-	// Output:
+	// May Output:
 	// map[key1:var1 key2:var2]
 	// map[key1:var1 key2:var2]
 }

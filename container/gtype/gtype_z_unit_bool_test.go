@@ -27,7 +27,19 @@ func Test_Bool(t *testing.T) {
 		t.AssertEQ(iClone1.Set(true), false)
 		t.AssertEQ(iClone1.Val(), true)
 
-		// 空参测试
+		t.AssertEQ(iClone1.Cas(false, true), false)
+		t.AssertEQ(iClone1.String(), "true")
+		t.AssertEQ(iClone1.Cas(true, false), true)
+		t.AssertEQ(iClone1.String(), "false")
+
+		copyVal := i1.DeepCopy()
+		iClone.Set(true)
+		t.AssertNE(copyVal, iClone.Val())
+		iClone = nil
+		copyVal = iClone.DeepCopy()
+		t.AssertNil(copyVal)
+
+		// empty param test
 		i2 := gtype.NewBool()
 		t.AssertEQ(i2.Val(), false)
 	})
@@ -56,16 +68,16 @@ func Test_Bool_JSON(t *testing.T) {
 		var err error
 		i := gtype.NewBool()
 		err = json.UnmarshalUseNumber([]byte("true"), &i)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(i.Val(), true)
 		err = json.UnmarshalUseNumber([]byte("false"), &i)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(i.Val(), false)
 		err = json.UnmarshalUseNumber([]byte("1"), &i)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(i.Val(), true)
 		err = json.UnmarshalUseNumber([]byte("0"), &i)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(i.Val(), false)
 	})
 
@@ -79,7 +91,7 @@ func Test_Bool_JSON(t *testing.T) {
 
 		i2 := gtype.NewBool()
 		err := json.UnmarshalUseNumber(b2, &i2)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(i2.Val(), i.Val())
 	})
 	gtest.C(t, func(t *gtest.T) {
@@ -92,7 +104,7 @@ func Test_Bool_JSON(t *testing.T) {
 
 		i2 := gtype.NewBool()
 		err := json.UnmarshalUseNumber(b2, &i2)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(i2.Val(), i.Val())
 	})
 }
@@ -108,7 +120,7 @@ func Test_Bool_UnmarshalValue(t *testing.T) {
 			"name": "john",
 			"var":  "true",
 		}, &v)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(v.Name, "john")
 		t.Assert(v.Var.Val(), true)
 	})
@@ -118,7 +130,7 @@ func Test_Bool_UnmarshalValue(t *testing.T) {
 			"name": "john",
 			"var":  "false",
 		}, &v)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(v.Name, "john")
 		t.Assert(v.Var.Val(), false)
 	})

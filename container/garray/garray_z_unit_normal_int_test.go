@@ -14,6 +14,7 @@ import (
 
 	"github.com/gogf/gf/v2/container/garray"
 	"github.com/gogf/gf/v2/frame/g"
+	"github.com/gogf/gf/v2/internal/empty"
 	"github.com/gogf/gf/v2/internal/json"
 	"github.com/gogf/gf/v2/test/gtest"
 	"github.com/gogf/gf/v2/util/gconv"
@@ -63,6 +64,19 @@ func Test_IntArray_Basic(t *testing.T) {
 		array.InsertAfter(6, 400)
 		t.Assert(array.Slice(), []int{100, 200, 1, 2, 3, 300, 4, 400})
 		t.Assert(array.Clear().Len(), 0)
+		err := array.InsertBefore(99, 300)
+		t.AssertNE(err, nil)
+		err = array.InsertAfter(99, 400)
+		t.AssertNE(err, nil)
+	})
+
+	gtest.C(t, func(t *gtest.T) {
+		array := garray.NewIntArrayFrom([]int{0, 1, 2, 3})
+		copyArray := array.DeepCopy().(*garray.IntArray)
+		copyArray.Set(0, 1)
+		cval, _ := copyArray.Get(0)
+		val, _ := array.Get(0)
+		t.AssertNE(cval, val)
 	})
 }
 
@@ -89,6 +103,8 @@ func TestIntArray_Unique(t *testing.T) {
 		expect := []int{1, 2, 3, 4, 5, 3, 2, 2, 3, 5, 5}
 		array := garray.NewIntArrayFrom(expect)
 		t.Assert(array.Unique().Slice(), []int{1, 2, 3, 4, 5})
+		array2 := garray.NewIntArrayFrom([]int{})
+		t.Assert(array2.Unique().Slice(), []int{})
 	})
 }
 
@@ -374,6 +390,14 @@ func TestIntArray_Rand(t *testing.T) {
 		v, ok := array1.Rand()
 		t.AssertIN(v, a1)
 		t.Assert(ok, true)
+
+		array2 := garray.NewIntArrayFrom([]int{})
+		v, ok = array2.Rand()
+		t.Assert(v, 0)
+		t.Assert(ok, false)
+
+		intSlices := array2.Rands(1)
+		t.Assert(intSlices, nil)
 	})
 }
 
@@ -420,6 +444,8 @@ func TestIntArray_String(t *testing.T) {
 		a1 := []int{0, 1, 2, 3, 4, 5, 6}
 		array1 := garray.NewIntArrayFrom(a1)
 		t.Assert(array1.String(), "[0,1,2,3,4,5,6]")
+		array1 = nil
+		t.Assert(array1.String(), "")
 	})
 }
 
@@ -615,11 +641,12 @@ func TestIntArray_Json(t *testing.T) {
 
 		a2 := garray.NewIntArray()
 		err1 = json.UnmarshalUseNumber(b2, &a2)
+		t.AssertNil(err1)
 		t.Assert(a2.Slice(), s1)
 
 		var a3 garray.IntArray
 		err := json.UnmarshalUseNumber(b2, &a3)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(a3.Slice(), s1)
 	})
 	// array value
@@ -633,11 +660,12 @@ func TestIntArray_Json(t *testing.T) {
 
 		a2 := garray.NewIntArray()
 		err1 = json.UnmarshalUseNumber(b2, &a2)
+		t.AssertNil(err1)
 		t.Assert(a2.Slice(), s1)
 
 		var a3 garray.IntArray
 		err := json.UnmarshalUseNumber(b2, &a3)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(a3.Slice(), s1)
 	})
 	// array pointer
@@ -651,11 +679,11 @@ func TestIntArray_Json(t *testing.T) {
 			"Scores": []int{99, 100, 98},
 		}
 		b, err := json.Marshal(data)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 
 		user := new(User)
 		err = json.UnmarshalUseNumber(b, user)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(user.Name, data["Name"])
 		t.Assert(user.Scores, data["Scores"])
 	})
@@ -670,11 +698,11 @@ func TestIntArray_Json(t *testing.T) {
 			"Scores": []int{99, 100, 98},
 		}
 		b, err := json.Marshal(data)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 
 		user := new(User)
 		err = json.UnmarshalUseNumber(b, user)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(user.Name, data["Name"])
 		t.Assert(user.Scores, data["Scores"])
 	})
@@ -740,6 +768,15 @@ func TestIntArray_RemoveValue(t *testing.T) {
 	})
 }
 
+func TestIntArray_RemoveValues(t *testing.T) {
+	slice := g.SliceInt{10, 20, 30, 40}
+	array := garray.NewIntArrayFrom(slice)
+	gtest.C(t, func(t *gtest.T) {
+		array.RemoveValues(10, 20, 40)
+		t.Assert(array.Slice(), g.SliceInt{30})
+	})
+}
+
 func TestIntArray_UnmarshalValue(t *testing.T) {
 	type V struct {
 		Name  string
@@ -752,7 +789,7 @@ func TestIntArray_UnmarshalValue(t *testing.T) {
 			"name":  "john",
 			"array": []byte(`[1,2,3]`),
 		}, &v)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(v.Name, "john")
 		t.Assert(v.Array.Slice(), g.Slice{1, 2, 3})
 	})
@@ -763,10 +800,38 @@ func TestIntArray_UnmarshalValue(t *testing.T) {
 	//		"name":  "john",
 	//		"array": g.Slice{1, 2, 3},
 	//	}, &v)
-	//	t.Assert(err, nil)
+	//	t.AssertNil(err)
 	//	t.Assert(v.Name, "john")
 	//	t.Assert(v.Array.Slice(), g.Slice{1, 2, 3})
 	// })
+}
+
+func TestIntArray_Filter(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		array := garray.NewIntArrayFrom(g.SliceInt{0, 1, 2, 3, 4, 0})
+		t.Assert(array.Filter(func(index int, value int) bool {
+			return empty.IsEmpty(value)
+		}), g.SliceInt{1, 2, 3, 4})
+	})
+	gtest.C(t, func(t *gtest.T) {
+		array := garray.NewIntArrayFrom(g.SliceInt{1, 2, 3, 4})
+		t.Assert(array.Filter(func(index int, value int) bool {
+			return empty.IsEmpty(value)
+
+		}), g.SliceInt{1, 2, 3, 4})
+	})
+	gtest.C(t, func(t *gtest.T) {
+		array := garray.NewIntArrayFrom(g.SliceInt{1, 2, 3, 4})
+		t.Assert(array.Filter(func(index int, value int) bool {
+			return value%2 == 0
+		}), g.SliceInt{1, 3})
+	})
+	gtest.C(t, func(t *gtest.T) {
+		array := garray.NewIntArrayFrom(g.SliceInt{1, 2, 3, 4})
+		t.Assert(array.Filter(func(index int, value int) bool {
+			return value%2 == 1
+		}), g.SliceInt{2, 4})
+	})
 }
 
 func TestIntArray_FilterEmpty(t *testing.T) {
@@ -786,5 +851,16 @@ func TestIntArray_Walk(t *testing.T) {
 		t.Assert(array.Walk(func(value int) int {
 			return 10 + value
 		}), g.Slice{11, 12})
+	})
+}
+
+func TestIntArray_NewIntArrayRange(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		array := garray.NewIntArrayRange(0, 128, 4)
+		t.Assert(array.String(), `[0,4,8,12,16,20,24,28,32,36,40,44,48,52,56,60,64,68,72,76,80,84,88,92,96,100,104,108,112,116,120,124,128]`)
+	})
+	gtest.C(t, func(t *gtest.T) {
+		array := garray.NewIntArrayRange(1, 128, 4)
+		t.Assert(array.String(), `[1,5,9,13,17,21,25,29,33,37,41,45,49,53,57,61,65,69,73,77,81,85,89,93,97,101,105,109,113,117,121,125]`)
 	})
 }

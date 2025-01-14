@@ -7,6 +7,7 @@
 package gmap_test
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/gogf/gf/v2/container/garray"
@@ -98,6 +99,12 @@ func Test_StrStrMap_Set_Fun(t *testing.T) {
 		t.Assert(m.SetIfNotExistFuncLock("b", getStr), false)
 		t.Assert(m.SetIfNotExistFuncLock("d", getStr), true)
 	})
+
+	gtest.C(t, func(t *gtest.T) {
+		m := gmap.NewStrStrMapFrom(nil)
+
+		t.Assert(m.GetOrSetFuncLock("b", getStr), "z")
+	})
 }
 
 func Test_StrStrMap_Batch(t *testing.T) {
@@ -110,6 +117,21 @@ func Test_StrStrMap_Batch(t *testing.T) {
 		t.Assert(m.Map(), map[string]string{"c": "c"})
 	})
 }
+
+func Test_StrStrMap_Iterator_Deadlock(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		m := gmap.NewStrStrMapFrom(map[string]string{"1": "1", "2": "2", "3": "3", "4": "4"}, true)
+		m.Iterator(func(k string, _ string) bool {
+			kInt, _ := strconv.Atoi(k)
+			if kInt%2 == 0 {
+				m.Remove(k)
+			}
+			return true
+		})
+		t.Assert(m.Size(), 2)
+	})
+}
+
 func Test_StrStrMap_Iterator(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
 		expect := map[string]string{"a": "a", "b": "b"}
@@ -147,6 +169,7 @@ func Test_StrStrMap_Lock(t *testing.T) {
 		})
 	})
 }
+
 func Test_StrStrMap_Clone(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
 		// clone 方法是深克隆
@@ -162,6 +185,7 @@ func Test_StrStrMap_Clone(t *testing.T) {
 		t.AssertIN("b", m.Keys())
 	})
 }
+
 func Test_StrStrMap_Merge(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
 		m1 := gmap.NewStrStrMap()
@@ -170,6 +194,9 @@ func Test_StrStrMap_Merge(t *testing.T) {
 		m2.Set("b", "b")
 		m1.Merge(m2)
 		t.Assert(m1.Map(), map[string]string{"a": "a", "b": "b"})
+		m3 := gmap.NewStrStrMapFrom(nil)
+		m3.Merge(m2)
+		t.Assert(m3.Map(), m2.Map())
 	})
 }
 
@@ -241,11 +268,11 @@ func Test_StrStrMap_Json(t *testing.T) {
 			"k2": "v2",
 		}
 		b, err := json.Marshal(data)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 
 		m := gmap.NewStrStrMap()
 		err = json.UnmarshalUseNumber(b, m)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(m.Get("k1"), data["k1"])
 		t.Assert(m.Get("k2"), data["k2"])
 	})
@@ -255,11 +282,11 @@ func Test_StrStrMap_Json(t *testing.T) {
 			"k2": "v2",
 		}
 		b, err := json.Marshal(data)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 
 		var m gmap.StrStrMap
 		err = json.UnmarshalUseNumber(b, &m)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(m.Get("k1"), data["k1"])
 		t.Assert(m.Get("k2"), data["k2"])
 	})
@@ -284,6 +311,10 @@ func Test_StrStrMap_Pop(t *testing.T) {
 
 		t.AssertNE(k1, k2)
 		t.AssertNE(v1, v2)
+
+		k3, v3 := m.Pop()
+		t.Assert(k3, "")
+		t.Assert(v3, "")
 	})
 }
 
@@ -315,6 +346,11 @@ func Test_StrStrMap_Pops(t *testing.T) {
 
 		t.Assert(kArray.Unique().Len(), 3)
 		t.Assert(vArray.Unique().Len(), 3)
+
+		v := m.Pops(1)
+		t.AssertNil(v)
+		v = m.Pops(-1)
+		t.AssertNil(v)
 	})
 }
 
@@ -330,7 +366,7 @@ func TestStrStrMap_UnmarshalValue(t *testing.T) {
 			"name": "john",
 			"map":  []byte(`{"k1":"v1","k2":"v2"}`),
 		}, &v)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(v.Name, "john")
 		t.Assert(v.Map.Size(), 2)
 		t.Assert(v.Map.Get("k1"), "v1")
@@ -346,10 +382,60 @@ func TestStrStrMap_UnmarshalValue(t *testing.T) {
 				"k2": "v2",
 			},
 		}, &v)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(v.Name, "john")
 		t.Assert(v.Map.Size(), 2)
 		t.Assert(v.Map.Get("k1"), "v1")
 		t.Assert(v.Map.Get("k2"), "v2")
+	})
+}
+
+func Test_StrStrMap_DeepCopy(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		m := gmap.NewStrStrMapFrom(g.MapStrStr{
+			"key1": "val1",
+			"key2": "val2",
+		})
+		t.Assert(m.Size(), 2)
+
+		n := m.DeepCopy().(*gmap.StrStrMap)
+		n.Set("key1", "v1")
+		t.AssertNE(m.Get("key1"), n.Get("key1"))
+	})
+}
+
+func Test_StrStrMap_IsSubOf(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		m1 := gmap.NewStrStrMapFrom(g.MapStrStr{
+			"k1": "v1",
+			"k2": "v2",
+		})
+		m2 := gmap.NewStrStrMapFrom(g.MapStrStr{
+			"k2": "v2",
+		})
+		t.Assert(m1.IsSubOf(m2), false)
+		t.Assert(m2.IsSubOf(m1), true)
+		t.Assert(m2.IsSubOf(m2), true)
+	})
+}
+
+func Test_StrStrMap_Diff(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		m1 := gmap.NewStrStrMapFrom(g.MapStrStr{
+			"0": "0",
+			"1": "1",
+			"2": "2",
+			"3": "3",
+		})
+		m2 := gmap.NewStrStrMapFrom(g.MapStrStr{
+			"0": "0",
+			"2": "2",
+			"3": "31",
+			"4": "4",
+		})
+		addedKeys, removedKeys, updatedKeys := m1.Diff(m2)
+		t.Assert(addedKeys, []string{"4"})
+		t.Assert(removedKeys, []string{"1"})
+		t.Assert(updatedKeys, []string{"3"})
 	})
 }

@@ -7,12 +7,20 @@
 .settings/
 .vscode/
 vendor/
-composer.lock
-gitpush.sh
 pkg/
 bin/
-cbuild
 **/.DS_Store
-.vscode/
 .test/
-main
+cmd/gf/main
+cmd/gf/gf
+temp/
+example/log
+go.work
+go.work.sum
+!cmd/gf/go.work
+.windsurfrules
+
+# Ignore for docs
+node_modules
+.docusaurus
+output

@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gogf/gf/v2/errors/gcode"
 	"github.com/gogf/gf/v2/errors/gerror"
 )
 
@@ -25,13 +24,23 @@ func GetIpArray() (ips []string, err error) {
 	}
 	for _, address := range interfaceAddr {
 		ipNet, isValidIpNet := address.(*net.IPNet)
-		if isValidIpNet && !ipNet.IP.IsLoopback() {
-			if ipNet.IP.To4() != nil {
-				ips = append(ips, ipNet.IP.String())
-			}
+		if !(isValidIpNet && !ipNet.IP.IsLoopback()) {
+			continue
+		}
+		if ipNet.IP.To4() != nil {
+			ips = append(ips, ipNet.IP.String())
 		}
 	}
 	return ips, nil
+}
+
+// MustGetIntranetIp performs as GetIntranetIp, but it panics if any error occurs.
+func MustGetIntranetIp() string {
+	ip, err := GetIntranetIp()
+	if err != nil {
+		panic(err)
+	}
+	return ip
 }
 
 // GetIntranetIp retrieves and returns the first intranet ip of current machine.
@@ -63,7 +72,7 @@ func GetIntranetIpArray() (ips []string, err error) {
 			continue
 		}
 		if interFace.Flags&net.FlagLoopback != 0 {
-			// loopback interface
+			// loop back interface
 			continue
 		}
 		// ignore warden bridge
@@ -127,7 +136,6 @@ func IsIntranet(ip string) bool {
 	if array[0] == "172" {
 		second, err := strconv.ParseInt(array[1], 10, 64)
 		if err != nil {
-			err = gerror.WrapCodef(gcode.CodeInvalidParameter, err, `strconv.ParseInt failed for string "%s"`, array[1])
 			return false
 		}
 		if second >= 16 && second <= 31 {

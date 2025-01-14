@@ -14,8 +14,8 @@ import (
 
 	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/net/ghttp"
-	"github.com/gogf/gf/v2/net/gtcp"
 	"github.com/gogf/gf/v2/test/gtest"
+	"github.com/gogf/gf/v2/util/guid"
 )
 
 type testWrapStdHTTPStruct struct {
@@ -29,10 +29,10 @@ func (t *testWrapStdHTTPStruct) ServeHTTP(w http.ResponseWriter, req *http.Reque
 	w.WriteHeader(http.StatusInternalServerError)
 	fmt.Fprint(w, t.text)
 }
+
 func Test_Server_Wrap_Handler(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
-		p, _ := gtcp.GetFreePort()
-		s := g.Server(p)
+		s := g.Server(guid.S())
 		str1 := "hello"
 		str2 := "hello again"
 		s.Group("/api", func(group *ghttp.RouterGroup) {
@@ -46,24 +46,23 @@ func Test_Server_Wrap_Handler(t *testing.T) {
 			group.POST("/wraph", ghttp.WrapH(&testWrapStdHTTPStruct{t, str2}))
 		})
 
-		s.SetPort(p)
 		s.SetDumpRouterMap(false)
 		s.Start()
 		defer s.Shutdown()
 
 		time.Sleep(100 * time.Millisecond)
 		client := g.Client()
-		client.SetPrefix(fmt.Sprintf("http://127.0.0.1:%d/api", p))
+		client.SetPrefix(fmt.Sprintf("http://127.0.0.1:%d/api", s.GetListenedPort()))
 
-		response, er1 := client.Get(ctx, "/wrapf")
+		response, err := client.Get(ctx, "/wrapf")
+		t.AssertNil(err)
 		defer response.Close()
-		t.Assert(er1, nil)
 		t.Assert(response.StatusCode, http.StatusBadRequest)
 		t.Assert(response.ReadAllString(), str1)
 
-		response2, er2 := client.Post(ctx, "/wraph")
+		response2, err := client.Post(ctx, "/wraph")
+		t.AssertNil(err)
 		defer response2.Close()
-		t.Assert(er2, nil)
 		t.Assert(response2.StatusCode, http.StatusInternalServerError)
 		t.Assert(response2.ReadAllString(), str2)
 	})

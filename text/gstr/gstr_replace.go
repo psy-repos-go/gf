@@ -33,21 +33,17 @@ func ReplaceI(origin, search, replace string, count ...int) string {
 		return origin
 	}
 	var (
-		searchLength = len(search)
-		searchLower  = strings.ToLower(search)
-		originLower  string
-		pos          int
-		diff         = len(replace) - searchLength
+		searchLength  = len(search)
+		replaceLength = len(replace)
+		searchLower   = strings.ToLower(search)
+		originLower   string
+		pos           int
 	)
 	for {
 		originLower = strings.ToLower(origin)
 		if pos = Pos(originLower, searchLower, pos); pos != -1 {
 			origin = origin[:pos] + replace + origin[pos+searchLength:]
-			if diff < 0 {
-				pos += -diff
-			} else {
-				pos += diff + 1
-			}
+			pos += replaceLength
 			if n--; n == 0 {
 				break
 			}
@@ -95,4 +91,97 @@ func ReplaceIByMap(origin string, replaces map[string]string) string {
 		origin = ReplaceI(origin, k, v)
 	}
 	return origin
+}
+
+// ReplaceFunc returns a copy of the string `origin` in which each non-overlapping substring
+// that matches the given search string is replaced by the result of function `f` applied to that substring.
+// The function `f` is called with each matching substring as its argument and must return a string to be used
+// as the replacement value.
+func ReplaceFunc(origin string, search string, f func(string) string) string {
+	if search == "" {
+		return origin
+	}
+	var (
+		searchLen = len(search)
+		originLen = len(origin)
+	)
+	// If search string is longer than origin string, no match is possible
+	if searchLen > originLen {
+		return origin
+	}
+	var (
+		result     strings.Builder
+		lastMatch  int
+		currentPos int
+	)
+	// Pre-allocate the builder capacity to avoid reallocations
+	result.Grow(originLen)
+
+	for currentPos < originLen {
+		pos := Pos(origin[currentPos:], search)
+		if pos == -1 {
+			break
+		}
+		pos += currentPos
+		// Append unmatched portion
+		result.WriteString(origin[lastMatch:pos])
+		// Apply replacement function and append result
+		match := origin[pos : pos+searchLen]
+		result.WriteString(f(match))
+		// Update positions
+		lastMatch = pos + searchLen
+		currentPos = lastMatch
+	}
+	// Append remaining unmatched portion
+	if lastMatch < originLen {
+		result.WriteString(origin[lastMatch:])
+	}
+	return result.String()
+}
+
+// ReplaceIFunc returns a copy of the string `origin` in which each non-overlapping substring
+// that matches the given search string is replaced by the result of function `f` applied to that substring.
+// The match is done case-insensitively.
+// The function `f` is called with each matching substring as its argument and must return a string to be used
+// as the replacement value.
+func ReplaceIFunc(origin string, search string, f func(string) string) string {
+	if search == "" {
+		return origin
+	}
+	var (
+		searchLen = len(search)
+		originLen = len(origin)
+	)
+	// If search string is longer than origin string, no match is possible
+	if searchLen > originLen {
+		return origin
+	}
+	var (
+		result     strings.Builder
+		lastMatch  int
+		currentPos int
+	)
+	// Pre-allocate the builder capacity to avoid reallocations
+	result.Grow(originLen)
+
+	for currentPos < originLen {
+		pos := PosI(origin[currentPos:], search)
+		if pos == -1 {
+			break
+		}
+		pos += currentPos
+		// Append unmatched portion
+		result.WriteString(origin[lastMatch:pos])
+		// Apply replacement function and append result
+		match := origin[pos : pos+searchLen]
+		result.WriteString(f(match))
+		// Update positions
+		lastMatch = pos + searchLen
+		currentPos = lastMatch
+	}
+	// Append remaining unmatched portion
+	if lastMatch < originLen {
+		result.WriteString(origin[lastMatch:])
+	}
+	return result.String()
 }

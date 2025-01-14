@@ -7,6 +7,7 @@
 package gmap_test
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/gogf/gf/v2/container/garray"
@@ -100,6 +101,11 @@ func Test_StrIntMap_Set_Fun(t *testing.T) {
 		t.Assert(m.SetIfNotExistFuncLock("b", getInt), false)
 		t.Assert(m.SetIfNotExistFuncLock("d", getInt), true)
 	})
+
+	gtest.C(t, func(t *gtest.T) {
+		m := gmap.NewStrIntMapFrom(nil)
+		t.Assert(m.GetOrSetFuncLock("a", getInt), 123)
+	})
 }
 
 func Test_StrIntMap_Batch(t *testing.T) {
@@ -112,6 +118,21 @@ func Test_StrIntMap_Batch(t *testing.T) {
 		t.Assert(m.Map(), map[string]int{"c": 3})
 	})
 }
+
+func Test_StrIntMap_Iterator_Deadlock(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		m := gmap.NewStrIntMapFrom(map[string]int{"1": 1, "2": 2, "3": 3, "4": 4}, true)
+		m.Iterator(func(k string, _ int) bool {
+			kInt, _ := strconv.Atoi(k)
+			if kInt%2 == 0 {
+				m.Remove(k)
+			}
+			return true
+		})
+		t.Assert(m.Size(), 2)
+	})
+}
+
 func Test_StrIntMap_Iterator(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
 		expect := map[string]int{"a": 1, "b": 2}
@@ -165,6 +186,7 @@ func Test_StrIntMap_Clone(t *testing.T) {
 		t.AssertIN("b", m.Keys())
 	})
 }
+
 func Test_StrIntMap_Merge(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
 		m1 := gmap.NewStrIntMap()
@@ -173,6 +195,9 @@ func Test_StrIntMap_Merge(t *testing.T) {
 		m2.Set("b", 2)
 		m1.Merge(m2)
 		t.Assert(m1.Map(), map[string]int{"a": 1, "b": 2})
+		m3 := gmap.NewStrIntMapFrom(nil)
+		m3.Merge(m2)
+		t.Assert(m3.Map(), m2.Map())
 	})
 }
 
@@ -244,11 +269,11 @@ func Test_StrIntMap_Json(t *testing.T) {
 			"k2": 2,
 		}
 		b, err := json.Marshal(data)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 
 		m := gmap.NewStrIntMap()
 		err = json.UnmarshalUseNumber(b, m)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(m.Get("k1"), data["k1"])
 		t.Assert(m.Get("k2"), data["k2"])
 	})
@@ -258,11 +283,11 @@ func Test_StrIntMap_Json(t *testing.T) {
 			"k2": 2,
 		}
 		b, err := json.Marshal(data)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 
 		var m gmap.StrIntMap
 		err = json.UnmarshalUseNumber(b, &m)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(m.Get("k1"), data["k1"])
 		t.Assert(m.Get("k2"), data["k2"])
 	})
@@ -287,6 +312,10 @@ func Test_StrIntMap_Pop(t *testing.T) {
 
 		t.AssertNE(k1, k2)
 		t.AssertNE(v1, v2)
+
+		k3, v3 := m.Pop()
+		t.Assert(k3, "")
+		t.Assert(v3, 0)
 	})
 }
 
@@ -318,6 +347,11 @@ func Test_StrIntMap_Pops(t *testing.T) {
 
 		t.Assert(kArray.Unique().Len(), 3)
 		t.Assert(vArray.Unique().Len(), 3)
+
+		v := m.Pops(1)
+		t.AssertNil(v)
+		v = m.Pops(-1)
+		t.AssertNil(v)
 	})
 }
 
@@ -333,7 +367,7 @@ func TestStrIntMap_UnmarshalValue(t *testing.T) {
 			"name": "john",
 			"map":  []byte(`{"k1":1,"k2":2}`),
 		}, &v)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(v.Name, "john")
 		t.Assert(v.Map.Size(), 2)
 		t.Assert(v.Map.Get("k1"), 1)
@@ -349,10 +383,60 @@ func TestStrIntMap_UnmarshalValue(t *testing.T) {
 				"k2": 2,
 			},
 		}, &v)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(v.Name, "john")
 		t.Assert(v.Map.Size(), 2)
 		t.Assert(v.Map.Get("k1"), 1)
 		t.Assert(v.Map.Get("k2"), 2)
+	})
+}
+
+func Test_StrIntMap_DeepCopy(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		m := gmap.NewStrIntMapFrom(g.MapStrInt{
+			"key1": 1,
+			"key2": 2,
+		})
+		t.Assert(m.Size(), 2)
+
+		n := m.DeepCopy().(*gmap.StrIntMap)
+		n.Set("key1", 2)
+		t.AssertNE(m.Get("key1"), n.Get("key1"))
+	})
+}
+
+func Test_StrIntMap_IsSubOf(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		m1 := gmap.NewStrIntMapFrom(g.MapStrInt{
+			"k1": 1,
+			"k2": 2,
+		})
+		m2 := gmap.NewStrIntMapFrom(g.MapStrInt{
+			"k2": 2,
+		})
+		t.Assert(m1.IsSubOf(m2), false)
+		t.Assert(m2.IsSubOf(m1), true)
+		t.Assert(m2.IsSubOf(m2), true)
+	})
+}
+
+func Test_StrIntMap_Diff(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		m1 := gmap.NewStrIntMapFrom(g.MapStrInt{
+			"0": 0,
+			"1": 1,
+			"2": 2,
+			"3": 3,
+		})
+		m2 := gmap.NewStrIntMapFrom(g.MapStrInt{
+			"0": 0,
+			"2": 2,
+			"3": 31,
+			"4": 4,
+		})
+		addedKeys, removedKeys, updatedKeys := m1.Diff(m2)
+		t.Assert(addedKeys, []string{"4"})
+		t.Assert(removedKeys, []string{"1"})
+		t.Assert(updatedKeys, []string{"3"})
 	})
 }

@@ -21,8 +21,15 @@ func Test_String(t *testing.T) {
 		iClone := i.Clone()
 		t.AssertEQ(iClone.Set("123"), "abc")
 		t.AssertEQ(iClone.Val(), "123")
-
-		// 空参测试
+		t.AssertEQ(iClone.String(), "123")
+		//
+		copyVal := iClone.DeepCopy()
+		iClone.Set("124")
+		t.AssertNE(copyVal, iClone.Val())
+		iClone = nil
+		copyVal = iClone.DeepCopy()
+		t.AssertNil(copyVal)
+		// empty param test
 		i1 := gtype.NewString()
 		t.AssertEQ(i1.Val(), "")
 	})
@@ -40,7 +47,7 @@ func Test_String_JSON(t *testing.T) {
 
 		i2 := gtype.NewString()
 		err := json.UnmarshalUseNumber(b2, &i2)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(i2.Val(), s)
 	})
 }
@@ -56,7 +63,7 @@ func Test_String_UnmarshalValue(t *testing.T) {
 			"name": "john",
 			"var":  "123",
 		}, &v)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(v.Name, "john")
 		t.Assert(v.Var.Val(), "123")
 	})

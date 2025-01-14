@@ -34,9 +34,22 @@ func Test_Int(t *testing.T) {
 		wg.Wait()
 		t.AssertEQ(addTimes, i.Val())
 
-		// 空参测试
+		// empty param test
 		i1 := gtype.NewInt()
 		t.AssertEQ(i1.Val(), 0)
+
+		i2 := gtype.NewInt(11)
+		t.AssertEQ(i2.Add(1), 12)
+		t.AssertEQ(i2.Cas(11, 13), false)
+		t.AssertEQ(i2.Cas(12, 13), true)
+		t.AssertEQ(i2.String(), "13")
+
+		copyVal := i2.DeepCopy()
+		i2.Set(14)
+		t.AssertNE(copyVal, iClone.Val())
+		i2 = nil
+		copyVal = i2.DeepCopy()
+		t.AssertNil(copyVal)
 	})
 }
 
@@ -52,7 +65,7 @@ func Test_Int_JSON(t *testing.T) {
 
 		i2 := gtype.NewInt()
 		err := json.UnmarshalUseNumber(b2, &i2)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(i2.Val(), v)
 	})
 }
@@ -68,7 +81,7 @@ func Test_Int_UnmarshalValue(t *testing.T) {
 			"name": "john",
 			"var":  "123",
 		}, &v)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(v.Name, "john")
 		t.Assert(v.Var.Val(), "123")
 	})

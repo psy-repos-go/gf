@@ -19,6 +19,7 @@ import (
 	"github.com/gogf/gf/v2/os/gtime"
 	"github.com/gogf/gf/v2/text/gstr"
 	"github.com/gogf/gf/v2/util/gconv"
+	"github.com/gogf/gf/v2/util/gmode"
 	"github.com/gogf/gf/v2/util/gutil"
 )
 
@@ -27,9 +28,13 @@ func (view *View) buildInFuncDump(values ...interface{}) string {
 	buffer := bytes.NewBuffer(nil)
 	buffer.WriteString("\n")
 	buffer.WriteString("<!--\n")
-	for _, v := range values {
-		gutil.DumpTo(buffer, v, gutil.DumpOption{})
-		buffer.WriteString("\n")
+	if gmode.IsDevelop() {
+		for _, v := range values {
+			gutil.DumpTo(buffer, v, gutil.DumpOption{})
+			buffer.WriteString("\n")
+		}
+	} else {
+		buffer.WriteString("dump feature is disabled as process is not running in develop mode\n")
 	}
 	buffer.WriteString("-->\n")
 	return buffer.String()
@@ -235,7 +240,7 @@ func (view *View) buildInFuncXml(value interface{}, rootTag ...string) (string, 
 	return string(b), err
 }
 
-// buildInFuncXml implements build-in template function: ini ,
+// buildInFuncIni implements build-in template function: ini ,
 // which encodes and returns `value` as XML string.
 func (view *View) buildInFuncIni(value interface{}) (string, error) {
 	b, err := gjson.New(value).ToIni()

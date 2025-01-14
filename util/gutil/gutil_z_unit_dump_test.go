@@ -7,11 +7,15 @@
 package gutil_test
 
 import (
+	"bytes"
 	"testing"
 
+	"github.com/gogf/gf/v2/container/gtype"
+	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/net/ghttp"
 	"github.com/gogf/gf/v2/os/gtime"
 	"github.com/gogf/gf/v2/test/gtest"
+	"github.com/gogf/gf/v2/text/gstr"
 	"github.com/gogf/gf/v2/util/gmeta"
 	"github.com/gogf/gf/v2/util/gutil"
 )
@@ -68,6 +72,28 @@ func Test_Dump(t *testing.T) {
 			100: 100,
 		})
 		gutil.Dump(req)
+		gutil.Dump(true, false)
+		gutil.Dump(make(chan int))
+		gutil.Dump(func() {})
+		gutil.Dump(nil)
+		gutil.Dump(gtype.NewInt(1))
+	})
+}
+
+func Test_Dump_Map(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		buffer := bytes.NewBuffer(nil)
+		m := g.Map{
+			"k1": g.Map{
+				"k2": "v2",
+			},
+		}
+		gutil.DumpTo(buffer, m, gutil.DumpOption{})
+		t.Assert(buffer.String(), `{
+    "k1": {
+        "k2": "v2",
+    },
+}`)
 	})
 }
 
@@ -140,5 +166,132 @@ func Test_Dump_Slashes(t *testing.T) {
 
 		gutil.DumpWithType(req)
 		gutil.DumpWithType(req.Content)
+	})
+}
+
+// https://github.com/gogf/gf/issues/1661
+func Test_Dump_Issue1661(t *testing.T) {
+	type B struct {
+		ba int
+		bb string
+	}
+	type A struct {
+		aa int
+		ab string
+		cc []B
+	}
+	gtest.C(t, func(t *gtest.T) {
+		var q1 []A
+		var q2 []A
+		q2 = make([]A, 0)
+		q1 = []A{{aa: 1, ab: "1", cc: []B{{ba: 1}, {ba: 2}, {ba: 3}}}, {aa: 2, ab: "2", cc: []B{{ba: 1}, {ba: 2}, {ba: 3}}}}
+		for _, q1v := range q1 {
+			x := []string{"11", "22"}
+			for _, iv2 := range x {
+				ls := q1v
+				for i := range ls.cc {
+					sj := iv2
+					ls.cc[i].bb = sj
+				}
+				q2 = append(q2, ls)
+			}
+		}
+		buffer := bytes.NewBuffer(nil)
+		gutil.DumpTo(buffer, q2, gutil.DumpOption{})
+		t.Assert(buffer.String(), `[
+    {
+        aa: 1,
+        ab: "1",
+        cc: [
+            {
+                ba: 1,
+                bb: "22",
+            },
+            {
+                ba: 2,
+                bb: "22",
+            },
+            {
+                ba: 3,
+                bb: "22",
+            },
+        ],
+    },
+    {
+        aa: 1,
+        ab: "1",
+        cc: [
+            {
+                ba: 1,
+                bb: "22",
+            },
+            {
+                ba: 2,
+                bb: "22",
+            },
+            {
+                ba: 3,
+                bb: "22",
+            },
+        ],
+    },
+    {
+        aa: 2,
+        ab: "2",
+        cc: [
+            {
+                ba: 1,
+                bb: "22",
+            },
+            {
+                ba: 2,
+                bb: "22",
+            },
+            {
+                ba: 3,
+                bb: "22",
+            },
+        ],
+    },
+    {
+        aa: 2,
+        ab: "2",
+        cc: [
+            {
+                ba: 1,
+                bb: "22",
+            },
+            {
+                ba: 2,
+                bb: "22",
+            },
+            {
+                ba: 3,
+                bb: "22",
+            },
+        ],
+    },
+]`)
+	})
+}
+
+func Test_Dump_Cycle_Attribute(t *testing.T) {
+	type Abc struct {
+		ab int
+		cd *Abc
+	}
+	abc := Abc{ab: 3}
+	abc.cd = &abc
+	gtest.C(t, func(t *gtest.T) {
+		buffer := bytes.NewBuffer(nil)
+		g.DumpTo(buffer, abc, gutil.DumpOption{})
+		t.Assert(gstr.Contains(buffer.String(), "cycle"), true)
+	})
+}
+
+func Test_DumpJson(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		var jsonContent = `{"a":1,"b":2}`
+		gutil.DumpJson(jsonContent)
 	})
 }

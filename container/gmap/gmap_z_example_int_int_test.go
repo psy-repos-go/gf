@@ -8,6 +8,7 @@ package gmap_test
 
 import (
 	"fmt"
+
 	"github.com/gogf/gf/v2/container/gmap"
 	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/internal/json"
@@ -529,8 +530,12 @@ func ExampleIntIntMap_String() {
 
 	fmt.Println(m.String())
 
+	var m1 *gmap.IntIntMap = nil
+	fmt.Println(len(m1.String()))
+
 	// Output:
 	// {"1":1}
+	// 0
 }
 
 func ExampleIntIntMap_MarshalJSON() {

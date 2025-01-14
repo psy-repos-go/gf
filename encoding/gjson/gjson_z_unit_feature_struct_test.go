@@ -22,7 +22,7 @@ func Test_GetScan(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
 		var user *User
 		err := j.Get("1").Scan(&user)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(user, &User{
 			Name:  "smith",
 			Score: 60,
@@ -31,7 +31,7 @@ func Test_GetScan(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
 		var users []User
 		err := j.Get(".").Scan(&users)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(users, []User{
 			{
 				Name:  "john",
@@ -54,7 +54,7 @@ func Test_GetScanDeep(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
 		var user *User
 		err := j.Get("1").Scan(&user)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(user, &User{
 			Name:  "smith",
 			Score: 60,
@@ -63,7 +63,7 @@ func Test_GetScanDeep(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
 		var users []User
 		err := j.Get(".").Scan(&users)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(users, []User{
 			{
 				Name:  "john",
@@ -86,7 +86,7 @@ func Test_Scan1(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
 		var users []User
 		err := j.Var().Scan(&users)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(users, []User{
 			{
 				Name:  "john",
@@ -109,7 +109,7 @@ func Test_Scan2(t *testing.T) {
 	gtest.C(t, func(t *gtest.T) {
 		var users []User
 		err := j.Var().Scan(&users)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(users, []User{
 			{
 				Name:  "john",
@@ -138,7 +138,7 @@ func Test_Struct1(t *testing.T) {
 		type UserCollectionAddReq struct {
 			BaseInfo []BaseInfoItem `db:"_" json:"baseInfo" field:"_"`
 		}
-		jsonContent := `{
+		jsonContent := []byte(`{
 	"baseInfo": [{
 		"idCardNumber": "520101199412141111",
 		"isHouseholder": true,
@@ -195,12 +195,13 @@ func Test_Struct1(t *testing.T) {
 		"incomeInfo": [],
 		"liabilityInfo": []
 	}]
-}`
+}
+`)
 		data := new(UserCollectionAddReq)
-		j, err := gjson.LoadJson(jsonContent)
-		t.Assert(err, nil)
+		j, err := gjson.LoadJson(jsonContent, true)
+		t.AssertNil(err)
 		err = j.Scan(data)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 	})
 }
 
@@ -218,22 +219,24 @@ func Test_Struct(t *testing.T) {
 			Items []*Item                `json:"items"`
 		}
 
-		txt := `{
-		  "id":"88888",
-		  "me":{"name":"mikey","day":"20009"},
-		  "txt":"hello",
-		  "items":null
-		 }`
+		txt := []byte(`
+{
+	"id":"88888",
+	"me":{"name":"mikey","day":"20009"},
+	"txt":"hello",
+	"items":null
+}
+`)
 
 		j, err := gjson.LoadContent(txt)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(j.Get("me.name").String(), "mikey")
 		t.Assert(j.Get("items").String(), "")
 		t.Assert(j.Get("items").Bool(), false)
 		t.Assert(j.Get("items").Array(), nil)
 		m := new(M)
 		err = j.Scan(m)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.AssertNE(m.Me, nil)
 		t.Assert(m.Me["day"], "20009")
 		t.Assert(m.Items, nil)
@@ -281,18 +284,20 @@ func Test_Struct_Complicated(t *testing.T) {
 	}
 
 	gtest.C(t, func(t *gtest.T) {
-		jsonContent := `{
+		jsonContent := []byte(`
+{
 "certList":[
 {"certId":"2023313","certInfo":"{\"address\":\"xxxxxxx\",\"phoneNumber\":\"15084890\",\"companyName\":\"dddd\",\"communityCreditCode\":\"91110111MBE1G2B\",\"operateRange\":\"fff\",\"registerNo\":\"91110111MA00G2B\",\"legalPersonName\":\"rrr\"}","srcType":"1","statusCode":"2"},
 {"certId":"2023314","certInfo":"{\"identNo\":\"342224196507051\",\"userRealname\":\"xxxx\",\"identType\":\"01\"}","srcType":"8","statusCode":"0"},
 {"certId":"2023322","certInfo":"{\"businessLicense\":\"91110111MA00BE1G\",\"companyName\":\"sssss\",\"communityCreditCode\":\"91110111MA00BE1\"}","srcType":"2","statusCode":"0"}
 ]
-}`
+}
+`)
 		j, err := gjson.LoadContent(jsonContent)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		var response = new(Response)
 		err = j.Scan(response)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(len(response.CertList), 3)
 		t.Assert(response.CertList[0].CertID, 2023313)
 		t.Assert(response.CertList[1].CertID, 2023314)

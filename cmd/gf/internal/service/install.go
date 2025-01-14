@@ -1,3 +1,9 @@
+// Copyright GoFrame gf Author(https://goframe.org). All Rights Reserved.
+//
+// This Source Code Form is subject to the terms of the MIT License.
+// If a copy of the MIT was not distributed with this file,
+// You can obtain one at https://github.com/gogf/gf.
+
 package service
 
 import (
@@ -5,8 +11,6 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/gogf/gf/cmd/gf/v2/internal/utility/allyes"
-	"github.com/gogf/gf/cmd/gf/v2/internal/utility/mlog"
 	"github.com/gogf/gf/v2/container/garray"
 	"github.com/gogf/gf/v2/container/gset"
 	"github.com/gogf/gf/v2/frame/g"
@@ -15,6 +19,9 @@ import (
 	"github.com/gogf/gf/v2/os/gfile"
 	"github.com/gogf/gf/v2/text/gstr"
 	"github.com/gogf/gf/v2/util/gconv"
+
+	"github.com/gogf/gf/cmd/gf/v2/internal/utility/allyes"
+	"github.com/gogf/gf/cmd/gf/v2/internal/utility/mlog"
 )
 
 var (
@@ -28,11 +35,12 @@ type serviceInstallAvailablePath struct {
 	filePath  string
 	writable  bool
 	installed bool
+	IsSelf    bool
 }
 
 func (s serviceInstall) Run(ctx context.Context) (err error) {
 	// Ask where to install.
-	paths := s.getInstallPathsData()
+	paths := s.getAvailablePaths()
 	if len(paths) <= 0 {
 		mlog.Printf("no path detected, you can manually install gf by copying the binary to path folder.")
 		return
@@ -43,16 +51,21 @@ func (s serviceInstall) Run(ctx context.Context) (err error) {
 	// Print all paths status and determine the default selectedID value.
 	var (
 		selectedID = -1
+		newPaths   []serviceInstallAvailablePath
 		pathSet    = gset.NewStrSet() // Used for repeated items filtering.
 	)
-	for id, aPath := range paths {
-		if !pathSet.AddIfNotExist(aPath.dirPath) {
+	for _, path := range paths {
+		if !pathSet.AddIfNotExist(path.dirPath) {
 			continue
 		}
-		mlog.Printf("  %2d | %8t | %9t | %s", id, aPath.writable, aPath.installed, aPath.dirPath)
+		newPaths = append(newPaths, path)
+	}
+	paths = newPaths
+	for id, path := range paths {
+		mlog.Printf("  %2d | %8t | %9t | %s", id, path.writable, path.installed, path.dirPath)
 		if selectedID == -1 {
 			// Use the previously installed path as the most priority choice.
-			if aPath.installed {
+			if path.installed {
 				selectedID = id
 			}
 		}
@@ -61,6 +74,7 @@ func (s serviceInstall) Run(ctx context.Context) (err error) {
 	if selectedID == -1 {
 		// Order by choosing priority.
 		commonPaths := garray.NewStrArrayFrom(g.SliceStr{
+			s.getGoPathBin(),
 			`/usr/local/bin`,
 			`/usr/bin`,
 			`/usr/sbin`,
@@ -97,6 +111,8 @@ func (s serviceInstall) Run(ctx context.Context) (err error) {
 			)
 			if input != "" {
 				inputID = gconv.Int(input)
+			} else {
+				break
 			}
 			// Check if out of range.
 			if inputID >= len(paths) || inputID < 0 {
@@ -112,40 +128,48 @@ func (s serviceInstall) Run(ctx context.Context) (err error) {
 	dstPath := paths[selectedID]
 
 	// Install the new binary.
+	mlog.Debugf(`copy file from "%s" to "%s"`, gfile.SelfPath(), dstPath.filePath)
 	err = gfile.CopyFile(gfile.SelfPath(), dstPath.filePath)
 	if err != nil {
 		mlog.Printf("install gf binary to '%s' failed: %v", dstPath.dirPath, err)
 		mlog.Printf("you can manually install gf by copying the binary to folder: %s", dstPath.dirPath)
 	} else {
-		mlog.Printf("gf binary is successfully installed to: %s", dstPath.dirPath)
-	}
-
-	// Uninstall the old binary.
-	for _, aPath := range paths {
-		// Do not delete myself.
-		if aPath.filePath != "" && aPath.filePath != dstPath.filePath && gfile.SelfPath() != aPath.filePath {
-			_ = gfile.Remove(aPath.filePath)
-		}
+		mlog.Printf("gf binary is successfully installed to: %s", dstPath.filePath)
 	}
 	return
 }
 
 // IsInstalled checks and returns whether the binary is installed.
-func (s serviceInstall) IsInstalled() bool {
-	paths := s.getInstallPathsData()
+func (s serviceInstall) IsInstalled() (*serviceInstallAvailablePath, bool) {
+	paths := s.getAvailablePaths()
 	for _, aPath := range paths {
 		if aPath.installed {
-			return true
+			return &aPath, true
 		}
 	}
-	return false
+	return nil, false
 }
 
-// GetInstallPathsData returns the installation paths data for the binary.
-func (s serviceInstall) getInstallPathsData() []serviceInstallAvailablePath {
-	var folderPaths []serviceInstallAvailablePath
-	// Pre generate binaryFileName.
-	binaryFileName := "gf" + gfile.Ext(gfile.SelfPath())
+// getGoPathBin retrieves ad returns the GOPATH/bin path for binary.
+func (s serviceInstall) getGoPathBin() string {
+	if goPath := genv.Get(`GOPATH`).String(); goPath != "" {
+		return gfile.Join(goPath, "bin")
+	}
+	return ""
+}
+
+// getAvailablePaths returns the installation paths data for the binary.
+func (s serviceInstall) getAvailablePaths() []serviceInstallAvailablePath {
+	var (
+		folderPaths    []serviceInstallAvailablePath
+		binaryFileName = "gf" + gfile.Ext(gfile.SelfPath())
+	)
+	// $GOPATH/bin
+	if goPathBin := s.getGoPathBin(); goPathBin != "" {
+		folderPaths = s.checkAndAppendToAvailablePath(
+			folderPaths, goPathBin, binaryFileName,
+		)
+	}
 	switch runtime.GOOS {
 	case "darwin":
 		darwinInstallationCheckPaths := []string{"/usr/local/bin"}
@@ -157,21 +181,24 @@ func (s serviceInstall) getInstallPathsData() []serviceInstallAvailablePath {
 		fallthrough
 
 	default:
-		// $GOPATH/bin
-		gopath := gfile.Join(runtime.GOROOT(), "bin")
-		folderPaths = s.checkAndAppendToAvailablePath(
-			folderPaths, gopath, binaryFileName,
-		)
 		// Search and find the writable directory path.
 		envPath := genv.Get("PATH", genv.Get("Path").String()).String()
 		if gstr.Contains(envPath, ";") {
+			// windows.
 			for _, v := range gstr.SplitAndTrim(envPath, ";") {
+				if v == "." {
+					continue
+				}
 				folderPaths = s.checkAndAppendToAvailablePath(
 					folderPaths, v, binaryFileName,
 				)
 			}
 		} else if gstr.Contains(envPath, ":") {
+			// *nix.
 			for _, v := range gstr.SplitAndTrim(envPath, ":") {
+				if v == "." {
+					continue
+				}
 				folderPaths = s.checkAndAppendToAvailablePath(
 					folderPaths, v, binaryFileName,
 				)
@@ -196,6 +223,7 @@ func (s serviceInstall) checkAndAppendToAvailablePath(folderPaths []serviceInsta
 		filePath  = gfile.Join(dirPath, binaryFileName)
 		writable  = gfile.IsWritable(dirPath)
 		installed = gfile.Exists(filePath)
+		self      = gfile.SelfPath() == filePath
 	)
 	if !writable && !installed {
 		return folderPaths
@@ -207,5 +235,6 @@ func (s serviceInstall) checkAndAppendToAvailablePath(folderPaths []serviceInsta
 			writable:  writable,
 			filePath:  filePath,
 			installed: installed,
+			IsSelf:    self,
 		})
 }

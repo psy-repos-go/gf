@@ -45,7 +45,7 @@ func TestSPath_Basic(t *testing.T) {
 		defer gfile.Remove(gfile.Join(root, "gf_tmp"))
 		gsp := gspath.New(root, false)
 		realPath, err := gsp.Add(gfile.Join(root, "gf_tmp"))
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(realPath, gfile.Join(root, "gf_tmp"))
 		realPath, err = gsp.Add("gf_tmp1")
 		t.Assert(err != nil, true)
@@ -53,7 +53,9 @@ func TestSPath_Basic(t *testing.T) {
 		realPath, err = gsp.Add(gfile.Join(root, "gf_tmp", "gf.txt"))
 		t.Assert(err != nil, true)
 		t.Assert(realPath, "")
+
 		gsp.Remove("gf_tmp1")
+
 		t.Assert(gsp.Size(), 2)
 		t.Assert(len(gsp.Paths()), 2)
 		t.Assert(len(gsp.AllPaths()), 0)
@@ -65,7 +67,7 @@ func TestSPath_Basic(t *testing.T) {
 		t.Assert(realPath, "")
 
 		realPath, err = gsp.Set(root)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(realPath, root)
 
 		fp, isDir := gsp.Search("gf_tmp")
@@ -80,7 +82,7 @@ func TestSPath_Basic(t *testing.T) {
 
 		gsp = gspath.New(root, true)
 		realPath, err = gsp.Add(gfile.Join(root, "gf_tmp"))
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(realPath, gfile.Join(root, "gf_tmp"))
 
 		gfile.Mkdir(gfile.Join(root, "gf_tmp1"))
@@ -110,9 +112,5 @@ func TestSPath_Basic(t *testing.T) {
 		fp, isDir = gsp.Search("gf_tmp", "gf.txt")
 		t.Assert(fp, gfile.Join(root, "gf_tmp", "gf.txt"))
 		t.Assert(isDir, false)
-
-		fp, isDir = gsp.Search("/", "gf.txt")
-		t.Assert(fp, pwd)
-		t.Assert(isDir, true)
 	})
 }

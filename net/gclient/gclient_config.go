@@ -16,11 +16,14 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/net/proxy"
+
 	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/gogf/gf/v2/internal/intlog"
+	"github.com/gogf/gf/v2/net/gsel"
+	"github.com/gogf/gf/v2/net/gsvc"
 	"github.com/gogf/gf/v2/text/gregex"
 	"github.com/gogf/gf/v2/text/gstr"
-	"golang.org/x/net/proxy"
 )
 
 // SetBrowserMode enables browser mode of the client.
@@ -105,13 +108,14 @@ func (c *Client) SetBasicAuth(user, pass string) *Client {
 }
 
 // SetRetry sets retry count and interval.
+// TODO removed.
 func (c *Client) SetRetry(retryCount int, retryInterval time.Duration) *Client {
 	c.retryCount = retryCount
 	c.retryInterval = retryInterval
 	return c
 }
 
-// SetRedirectLimit limit the number of jumps
+// SetRedirectLimit limits the number of jumps.
 func (c *Client) SetRedirectLimit(redirectLimit int) *Client {
 	c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if len(via) >= redirectLimit {
@@ -119,6 +123,12 @@ func (c *Client) SetRedirectLimit(redirectLimit int) *Client {
 		}
 		return nil
 	}
+	return c
+}
+
+// SetNoUrlEncode sets the mark that do not encode the parameters before sending request.
+func (c *Client) SetNoUrlEncode(noUrlEncode bool) *Client {
+	c.noUrlEncode = noUrlEncode
 	return c
 }
 
@@ -132,7 +142,7 @@ func (c *Client) SetProxy(proxyURL string) {
 	}
 	_proxy, err := url.Parse(proxyURL)
 	if err != nil {
-		intlog.Error(context.TODO(), err)
+		intlog.Errorf(context.TODO(), `%+v`, err)
 		return
 	}
 	if _proxy.Scheme == httpProtocolName {
@@ -140,7 +150,7 @@ func (c *Client) SetProxy(proxyURL string) {
 			v.Proxy = http.ProxyURL(_proxy)
 		}
 	} else {
-		var auth = &proxy.Auth{}
+		auth := &proxy.Auth{}
 		user := _proxy.User.Username()
 		if user != "" {
 			auth.User = user
@@ -162,7 +172,7 @@ func (c *Client) SetProxy(proxyURL string) {
 			},
 		)
 		if err != nil {
-			intlog.Error(context.TODO(), err)
+			intlog.Errorf(context.TODO(), `%+v`, err)
 			return
 		}
 		if v, ok := c.Transport.(*http.Transport); ok {
@@ -195,4 +205,14 @@ func (c *Client) SetTLSConfig(tlsConfig *tls.Config) error {
 		return nil
 	}
 	return gerror.New(`cannot set TLSClientConfig for custom Transport of the client`)
+}
+
+// SetBuilder sets the load balance builder for client.
+func (c *Client) SetBuilder(builder gsel.Builder) {
+	c.builder = builder
+}
+
+// SetDiscovery sets the load balance builder for client.
+func (c *Client) SetDiscovery(discovery gsvc.Discovery) {
+	c.discovery = discovery
 }

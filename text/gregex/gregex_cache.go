@@ -15,6 +15,7 @@ import (
 
 var (
 	regexMu = sync.RWMutex{}
+
 	// Cache for regex object.
 	// Note that:
 	// 1. It uses sync.RWMutex ensuring the concurrent safety.
@@ -38,8 +39,7 @@ func getRegexp(pattern string) (regex *regexp.Regexp, err error) {
 	}
 	// If it does not exist in the cache,
 	// it compiles the pattern and creates one.
-	regex, err = regexp.Compile(pattern)
-	if err != nil {
+	if regex, err = regexp.Compile(pattern); err != nil {
 		err = gerror.Wrapf(err, `regexp.Compile failed for pattern "%s"`, pattern)
 		return
 	}

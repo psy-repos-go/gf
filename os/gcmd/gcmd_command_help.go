@@ -11,12 +11,19 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"os"
 
 	"github.com/gogf/gf/v2/text/gstr"
 )
 
 // Print prints help info to stdout for current command.
 func (c *Command) Print() {
+	c.PrintTo(os.Stdout)
+}
+
+// PrintTo prints help info to custom io.Writer.
+func (c *Command) PrintTo(writer io.Writer) {
 	var (
 		prefix    = gstr.Repeat(" ", 4)
 		buffer    = bytes.NewBuffer(nil)
@@ -149,6 +156,9 @@ func (c *Command) Print() {
 				spaceLength    = maxSpaceLength - len(nameStr)
 				wordwrapPrefix = gstr.Repeat(" ", len(prefix+nameStr)+spaceLength+4)
 			)
+			if arg.Default != "" {
+				brief = fmt.Sprintf("%s (default: \"%s\")", brief, arg.Default)
+			}
 			c.printLineBrief(printLineBriefInput{
 				Buffer:         buffer,
 				Name:           nameStr,
@@ -191,7 +201,7 @@ func (c *Command) Print() {
 	}
 	content := buffer.String()
 	content = gstr.Replace(content, "\t", "    ")
-	fmt.Println(content)
+	_, _ = writer.Write([]byte(content))
 }
 
 type printLineBriefInput struct {

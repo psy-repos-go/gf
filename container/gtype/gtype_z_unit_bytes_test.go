@@ -22,9 +22,19 @@ func Test_Bytes(t *testing.T) {
 		t.AssertEQ(iClone.Set([]byte("123")), []byte("abc"))
 		t.AssertEQ(iClone.Val(), []byte("123"))
 
-		// 空参测试
+		// empty param test
 		i1 := gtype.NewBytes()
 		t.AssertEQ(i1.Val(), nil)
+
+		i2 := gtype.NewBytes([]byte("abc"))
+		t.Assert(i2.String(), "abc")
+
+		copyVal := i2.DeepCopy()
+		i2.Set([]byte("def"))
+		t.AssertNE(copyVal, iClone.Val())
+		i2 = nil
+		copyVal = i2.DeepCopy()
+		t.AssertNil(copyVal)
 	})
 }
 
@@ -40,7 +50,7 @@ func Test_Bytes_JSON(t *testing.T) {
 
 		i2 := gtype.NewBytes()
 		err := json.UnmarshalUseNumber(b2, &i2)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(i2.Val(), b)
 	})
 }
@@ -56,7 +66,7 @@ func Test_Bytes_UnmarshalValue(t *testing.T) {
 			"name": "john",
 			"var":  "123",
 		}, &v)
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(v.Name, "john")
 		t.Assert(v.Var.Val(), "123")
 	})

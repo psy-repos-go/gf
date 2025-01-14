@@ -65,7 +65,7 @@ func Test_New_CustomStruct(t *testing.T) {
 		t.AssertNE(j, nil)
 
 		s, err := j.ToJsonString()
-		t.Assert(err, nil)
+		t.AssertNil(err)
 		t.Assert(s == `{"Id":1,"Name":"john"}` || s == `{"Name":"john","Id":1}`, true)
 	})
 }
@@ -108,5 +108,15 @@ func Test_NewWithOptions(t *testing.T) {
 		data := []byte("[9223372036854775807, 9223372036854775806]")
 		array := gjson.NewWithOptions(data, gjson.Options{StrNumber: true}).Var().Array()
 		t.Assert(array, []uint64{9223372036854775807, 9223372036854775806})
+	})
+}
+
+func Test_LoadContentType(t *testing.T) {
+	gtest.C(t, func(t *gtest.T) {
+		data := []byte("value = 79937385836643329")
+		j, err := gjson.LoadContentType("toml", data)
+		t.AssertNil(err)
+		value := j.Get("value").Int64()
+		t.Assert(value, 79937385836643329)
 	})
 }
